@@ -1,12 +1,26 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuid } from 'uuid';
+import { URL } from 'whatwg-url';
 
 type Page = {
   uuid: string,
   url: string,
   html: string 
   links: Array<string>
+}
+
+/**
+ * Creates an absolute URL from a possibly relative URL
+ * 
+ * @param url the URL to possibly make absolute
+ * @param base the base/source URL needed to make it absolute
+ * @returns an absolute URL
+ */
+const makeAbsolute = (url: string, base: string): string => {
+  const full = new URL(url, base);
+
+  return full.href;
 }
 
 /**
@@ -23,7 +37,7 @@ export const getPage = (url: string): Promise<Page> => {
       const $ = cheerio.load(html);
       const links = $('a').toArray().map(anchor => {
         const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
-        return href.value;
+        return makeAbsolute(href.value, url);
       });
 
       resolve({
