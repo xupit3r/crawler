@@ -6,6 +6,6 @@
   "ignore": [],
   "exec": "ts-node ./src/index.ts",
   "env": {
-    "DEBUG": "*"
+    "DEBUG": "crawler,page"
   }
 }

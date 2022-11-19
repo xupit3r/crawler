@@ -1,3 +1,3 @@
-import { getPage } from './lib/page';
+import { crawl } from './lib/crawl';
 
-getPage('http://thejoeshow.net').then(page => console.log(page));
+crawl('http://thejoeshow.net');

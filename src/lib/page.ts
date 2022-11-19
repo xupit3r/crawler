@@ -3,18 +3,12 @@ import * as cheerio from 'cheerio';
 import { v4 as uuid } from 'uuid';
 import { URL } from 'whatwg-url';
 import debug from 'debug';
+import { Page } from '../types/page';
 import axiosConfig from './config/axios.json';
 
 const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
-
-type Page = {
-  uuid: string
-  url: string
-  html: string
-  links: Array<string>
-}
 
 /**
  * Creates an absolute URL from a possibly relative URL
