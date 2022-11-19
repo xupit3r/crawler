@@ -2,11 +2,17 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuid } from 'uuid';
 import { URL } from 'whatwg-url';
+import debug from 'debug';
+import axiosConfig from './config/axios.json';
+
+const requester = axios.create(axiosConfig);
+
+const logger = debug('page');
 
 type Page = {
-  uuid: string,
-  url: string,
-  html: string 
+  uuid: string
+  url: string
+  html: string
   links: Array<string>
 }
 
@@ -32,13 +38,15 @@ const makeAbsolute = (url: string, base: string): string => {
  */
 export const getPage = (url: string): Promise<Page> => {
   return new Promise((resolve, reject) => {
-    axios.get(url).then(resp => {
+    requester.get(url).then(resp => {
       const html = resp.data;
       const $ = cheerio.load(html);
       const links = $('a').toArray().map(anchor => {
         const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
-        return makeAbsolute(href.value, url);
-      });
+        return href ? href.value : '';
+      }).filter(link => link).map(link => makeAbsolute(link, url));
+
+      logger(`found ${links.length} in ${url}`);
 
       resolve({
         uuid: uuid(),
@@ -46,7 +54,12 @@ export const getPage = (url: string): Promise<Page> => {
         html: html,
         links: links
       });
-    }).catch(reject);
+    }).catch((err) => {
+      if (err.response) {
+        logger(`${url} failed with error code ${err.response.status}`);
+        return reject(new Error(err.response.data));
+      }
+    });
   });
 }
 
