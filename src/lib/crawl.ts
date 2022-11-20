@@ -1,29 +1,31 @@
+import { createClient } from 'redis';
 import { getPage } from './page';
 import debug from 'debug';
-import { Page, Crawled } from './types';
+import { Page } from './types';
 
 const logger = debug('crawler');
 
-const crawled: Crawled = {};
+const storage = createClient({
+  url: 'redis://localhost:6380'
+});
+const subscriber = storage.duplicate();
 
-/**
- * Initiates a crawl on a particular page
- * 
- * @param page the page to process
- */
-const processPage = (page: Page) => {
-  page.links.filter(link => !crawled[link]).forEach(link => crawl(link));
-}
+storage.on('error', (err) => console.log('Redis Client Error', err));
+storage.connect();
+subscriber.connect();
 
 /**
  * Simple crawler. Give it a URL, it does its thing.
  * 
  * @param start the URL to start crawling from
  */
-export const crawl = (start: string) => {
+export const crawl = async (start: string) => {
   logger(`starting with ${start}`);
 
-  crawled[start] = true;
+  getPage(start);
 
-  getPage(start).then(processPage).catch(err => logger(`failed to process ${start}`));
+  await subscriber.subscribe('pages', pageString => {
+    const page: Page = JSON.parse(pageString);
+    page.links.forEach(link => getPage(link));
+  });
 }

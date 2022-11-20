@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuid } from 'uuid';
 import { URL } from 'whatwg-url';
+import { createClient } from 'redis';
 import debug from 'debug';
 import { Page } from './types';
 import axiosConfig from './config/axios.json';
@@ -9,6 +10,15 @@ import axiosConfig from './config/axios.json';
 const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
+
+const storage = createClient({
+  url: 'redis://localhost:6380'
+});
+const publisher = storage.duplicate();
+
+storage.on('error', (err) => console.log('Redis Client Error', err));
+storage.connect();
+publisher.connect();
 
 /**
  * Creates an absolute URL from a possibly relative URL
@@ -28,32 +38,31 @@ const makeAbsolute = (url: string, base: string): string => {
  * returning a Page.
  * 
  * @param url the url for which we want to retrieve a Page for
- * @returns a Page that contains information on the requested page
  */
-export const getPage = (url: string): Promise<Page> => {
-  return new Promise((resolve, reject) => {
-    requester.get(url).then(resp => {
-      const html = resp.data;
-      const $ = cheerio.load(html);
-      const links = $('a').toArray().map(anchor => {
-        const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
-        return href ? href.value : '';
-      }).filter(link => link).map(link => makeAbsolute(link, url));
+export const getPage = (url: string) => {
+  requester.get(url).then(async resp => {
+    const html = resp.data;
+    const $ = cheerio.load(html);
+    const links = $('a').toArray().map(anchor => {
+      const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
+      return href ? href.value : '';
+    }).filter(link => link).map(link => makeAbsolute(link, url));
 
-      logger(`found ${links.length} in ${url}`);
+    const page: Page = {
+      url: url,
+      html: html,
+      links: links
+    };
+    const pageString = JSON.stringify(page);
 
-      resolve({
-        uuid: uuid(),
-        url: url,
-        html: html,
-        links: links
-      });
-    }).catch((err) => {
-      if (err.response) {
-        logger(`${url} failed with error code ${err.response.status}`);
-        return reject(new Error(err.response.data));
-      }
-    });
+    logger(`found ${links.length} links in ${url}`);
+
+    await storage.set(url, pageString);
+    publisher.publish('pages', pageString)
+  }).catch((err) => {
+    if (err.response) {
+      logger(`${url} failed with error code ${err.response.status}`);
+    }
   });
 }
 

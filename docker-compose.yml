@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  storage:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    command: redis-server --save 60 1 --loglevel warning
+    volumes: 
+      - storage:/data
+volumes:
+  storage:
+    driver: local
