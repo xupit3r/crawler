@@ -4,3 +4,7 @@ export type Page = {
   html: string
   links: Array<string>
 }
+
+export type Crawled = {
+  [link: string]: boolean
+}

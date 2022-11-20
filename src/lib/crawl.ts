@@ -1,11 +1,18 @@
 import { getPage } from './page';
 import debug from 'debug';
-import { Page } from '../types/page';
+import { Page, Crawled } from './types';
 
 const logger = debug('crawler');
 
+const crawled: Crawled = {};
+
+/**
+ * Initiates a crawl on a particular page
+ * 
+ * @param page the page to process
+ */
 const processPage = (page: Page) => {
-  page.links.forEach(link => crawl(link));
+  page.links.filter(link => !crawled[link]).forEach(link => crawl(link));
 }
 
 /**
@@ -15,6 +22,8 @@ const processPage = (page: Page) => {
  */
 export const crawl = (start: string) => {
   logger(`starting with ${start}`);
+
+  crawled[start] = true;
 
   getPage(start).then(processPage).catch(err => logger(`failed to process ${start}`));
 }

@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import { v4 as uuid } from 'uuid';
 import { URL } from 'whatwg-url';
 import debug from 'debug';
-import { Page } from '../types/page';
+import { Page } from './types';
 import axiosConfig from './config/axios.json';
 
 const requester = axios.create(axiosConfig);
