@@ -1,6 +1,5 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { v4 as uuid } from 'uuid';
 import { URL } from 'whatwg-url';
 import { createClient } from 'redis';
 import debug from 'debug';
