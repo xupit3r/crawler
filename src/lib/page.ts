@@ -10,13 +10,11 @@ const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
 
-const storage = createClient({
+const publisher = createClient({
   url: 'redis://localhost:6380'
 });
-const publisher = storage.duplicate();
 
-storage.on('error', (err) => console.log('Redis Client Error', err));
-storage.connect();
+publisher.on('error', err => logger('Redis Client Error', err));
 publisher.connect();
 
 /**
@@ -55,8 +53,7 @@ export const getPage = (url: string) => {
     const pageString = JSON.stringify(page);
 
     logger(`found ${links.length} links in ${url}`);
-
-    await storage.set(url, pageString);
+    
     publisher.publish('pages', pageString)
   }).catch((err) => {
     if (err.response) {

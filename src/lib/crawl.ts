@@ -5,13 +5,11 @@ import { Page } from './types';
 
 const logger = debug('crawler');
 
-const storage = createClient({
+const subscriber = createClient({
   url: 'redis://localhost:6380'
 });
-const subscriber = storage.duplicate();
 
-storage.on('error', (err) => console.log('Redis Client Error', err));
-storage.connect();
+subscriber.on('error', (err) => console.log('Redis Client Error', err));
 subscriber.connect();
 
 /**
