@@ -36,26 +36,24 @@ export const crawl = async (start: string) => {
           url: link
         });
 
-        if (page) {  
+        if (page) {
           page.links.forEach(link => LINKS.push(link));
-        } else {
-          try {
-            STATE.processing++;
-            const page: Page = await getPage(link);
-            logger(`retrieved page ${page.url}`);
-          } catch (err) {
-            logger(`failed to retrieve ${link}`)
-          } finally {
-            STATE.processing--;
-          }
+          return next();
         }
 
-        setTimeout(next, 250);
-      } else {
-        setTimeout(next, 1000);
+        try {
+          STATE.processing++;
+          const page: Page = await getPage(link);
+          logger(`retrieved page ${page.url}`);
+        } catch (err) {
+          logger(`failed to retrieve ${link}`)
+        } finally {
+          STATE.processing--;
+        }
       }
-    } else {
-      setTimeout(next, 1000);
     }
+
+    // try again in a bit
+    setTimeout(next, 250);
   }, err => logger(`exiting...${err}`));
 }
