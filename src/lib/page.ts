@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { URL } from 'whatwg-url';
 import { MongoClient } from 'mongodb';
 import debug from 'debug';
+import normalizeUrl from 'normalize-url';
 import { Page } from './types';
 import axiosConfig from './config/axios.json';
 
@@ -22,7 +23,7 @@ const storage = new MongoClient('mongodb://root:root@localhost:27018');
 const makeAbsolute = (url: string, base: string): string => {
   const full = new URL(url, base);
 
-  return full.href;
+  return normalizeUrl(full.href);
 }
 
 /**
@@ -42,7 +43,7 @@ export const getPage = (url: string): Promise<Page> => {
       }).filter(link => link).map(link => makeAbsolute(link, url));
   
       const page: Page = {
-        url: url,
+        url: normalizeUrl(url),
         html: html,
         links: links
       };
