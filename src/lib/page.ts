@@ -17,7 +17,7 @@ const publisher = createClient({
   url: 'redis://localhost:6380'
 });
 
-publisher.on('error', err => logger('Redis Client Error', err));
+publisher.on('error', err => logger('publisher error', err));
 publisher.connect();
 
 /**
