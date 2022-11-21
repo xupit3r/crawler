@@ -1,35 +1,17 @@
-import { createClient } from 'redis';
 import { MongoClient } from 'mongodb';
 import { getPage } from './page';
 import debug from 'debug';
 import { Page } from './types';
+import { forever } from 'async';
+
+const LINKS: Array<string> = [];
+const STATE = {
+  processing: 0
+};
 
 const logger = debug('crawler');
 
-const storage = new MongoClient('mongodb://localhost:27017');
-
-const subscriber = createClient({
-  url: 'redis://localhost:6380'
-});
-
-subscriber.on('error', (err) => console.log('subscriber error', err));
-subscriber.connect();
-
-const processPage = async (link: string) => {
-  await storage.connect();
-  const db = storage.db('crawler');
-  const pages = db.collection('pages');
-
-  const page: null | Page = await pages.findOne<Page | null>({
-    url: link
-  });
-
-  if (!page) {
-    getPage(link);
-  } else {
-    page.links.forEach(link => getPage(link));
-  }
-}
+const storage = new MongoClient('mongodb://root:root@localhost:27018');
 
 /**
  * Simple crawler. Give it a URL, it does its thing.
@@ -39,6 +21,41 @@ const processPage = async (link: string) => {
 export const crawl = async (start: string) => {
   logger(`starting with ${start}`);
 
-  getPage(start);
-  await subscriber.subscribe('pages', processPage);
+  LINKS.push(start);
+  
+  forever(async next => {
+    if (LINKS.length > 0 && STATE.processing < 10) {
+      const link = LINKS.shift();
+
+      if (typeof link === 'string') {
+        await storage.connect();
+        const db = storage.db('crawler');
+        const pages = db.collection('pages');
+      
+        const page: null | Page = await pages.findOne<Page | null>({
+          url: link
+        });
+
+        if (page) {  
+          page.links.forEach(link => LINKS.push(link));
+        } else {
+          try {
+            STATE.processing++;
+            const page: Page = await getPage(link);
+            logger(`retrieved page ${page.url}`);
+          } catch (err) {
+            logger(`failed to retrieve ${link}`)
+          } finally {
+            STATE.processing--;
+          }
+        }
+
+        setTimeout(next, 250);
+      } else {
+        setTimeout(next, 1000);
+      }
+    } else {
+      setTimeout(next, 1000);
+    }
+  }, err => logger(`exiting...${err}`));
 }
