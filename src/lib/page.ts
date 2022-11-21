@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'whatwg-url';
 import { createClient } from 'redis';
+import { MongoClient } from 'mongodb';
 import debug from 'debug';
 import { Page } from './types';
 import axiosConfig from './config/axios.json';
@@ -9,6 +10,8 @@ import axiosConfig from './config/axios.json';
 const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
+
+const storage = new MongoClient('mongodb://localhost:27017');
 
 const publisher = createClient({
   url: 'redis://localhost:6380'
@@ -36,7 +39,7 @@ const makeAbsolute = (url: string, base: string): string => {
  * 
  * @param url the url for which we want to retrieve a Page for
  */
-export const getPage = (url: string) => {
+export const getPage = async (url: string) => {
   requester.get(url).then(async resp => {
     const html = resp.data;
     const $ = cheerio.load(html);
@@ -53,7 +56,15 @@ export const getPage = (url: string) => {
     const pageString = JSON.stringify(page);
 
     logger(`found ${links.length} links in ${url}`);
+
+    await storage.connect();
     
+    // keep the page in storage
+    const db = storage.db('crawler');
+    const pages = db.collection('pages');
+    await pages.insertOne(page);
+    
+    // send it aht for procesing
     publisher.publish('pages', pageString)
   }).catch((err) => {
     if (err.response) {
