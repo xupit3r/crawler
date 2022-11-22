@@ -1,7 +1,7 @@
 import { MongoClient } from 'mongodb';
-import { getPage } from './page';
+import { processPage } from './page';
 import debug from 'debug';
-import { Page } from './types';
+import { Link, Page } from './types';
 import { forever } from 'async';
 
 const LINKS: Array<string> = [];
@@ -22,38 +22,49 @@ export const crawl = async (start: string) => {
   logger(`starting with ${start}`);
 
   LINKS.push(start);
+
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const links = db.collection('links');
+  const unvisited = await links.find({
+    visited: {
+      $ne: true
+    }
+  }).toArray();
+
+  unvisited.forEach(({url}) => LINKS.push(url));
   
   forever(async next => {
     if (LINKS.length > 0 && STATE.processing < 10) {
       const link = LINKS.shift();
 
       if (typeof link === 'string') {
-        await storage.connect();
-        const db = storage.db('crawler');
+        const db = storage.db('page');
         const pages = db.collection('pages');
-      
-        const page: null | Page = await pages.findOne<Page | null>({
-          url: link
-        });
-
+        const page: null | Page = await pages.findOne<Page>({ url: link});
+        
         if (page) {
-          page.links.forEach(link => LINKS.push(link));
           return next();
         }
 
         try {
           STATE.processing++;
-          const page: Page = await getPage(link);
-          logger(`retrieved page ${page.url}`);
+          const links: Array<Link> = await processPage(link);
+          links.filter(link => !link.visited).forEach(({url}) => LINKS.push(url));
+          logger(`retrieved page ${link}`);
         } catch (err) {
           logger(`failed to retrieve ${link}`)
         } finally {
           STATE.processing--;
         }
+
+        return setTimeout(next, 500);
+
       }
     }
 
     // try again in a bit
-    setTimeout(next, 250);
+    setTimeout(next, 1000);
   }, err => logger(`exiting...${err}`));
 }

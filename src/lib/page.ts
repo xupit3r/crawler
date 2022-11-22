@@ -3,8 +3,7 @@ import * as cheerio from 'cheerio';
 import { URL } from 'whatwg-url';
 import { MongoClient } from 'mongodb';
 import debug from 'debug';
-import normalizeUrl from 'normalize-url';
-import { Page } from './types';
+import { Link, LinkLookup, Page } from './types';
 import axiosConfig from './config/axios.json';
 
 const requester = axios.create(axiosConfig);
@@ -23,7 +22,13 @@ const storage = new MongoClient('mongodb://root:root@localhost:27018');
 const makeAbsolute = (url: string, base: string): string => {
   const full = new URL(url, base);
 
-  return normalizeUrl(full.href);
+  return full.href;
+}
+
+const getHostname = (url: string): string => {
+  const parsed = new URL(url);
+
+  return parsed.hostname;
 }
 
 /**
@@ -32,32 +37,75 @@ const makeAbsolute = (url: string, base: string): string => {
  * 
  * @param url the url for which we want to retrieve a Page for
  */
-export const getPage = (url: string): Promise<Page> => {
+export const processPage = (url: string): Promise<Array<Link>> => {
   return new Promise(async (resolve, reject) => {
     requester.get(url).then(async resp => {
       const html = resp.data;
       const $ = cheerio.load(html);
-      const links = $('a').toArray().map(anchor => {
+      const hrefs = $('a').toArray().map(anchor => {
         const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
         return href ? href.value : '';
       }).filter(link => link).map(link => makeAbsolute(link, url));
+
+      const hostname = getHostname(url);
   
       const page: Page = {
-        url: normalizeUrl(url),
-        html: html,
-        links: links
+        url: url,
+        host: hostname,
+        html: html
       };
-  
-      logger(`found ${links.length} links in ${url}`);
   
       // add the page to storage for safe keeping
       await storage.connect();
       const db = storage.db('crawler');
+
+      // store the page
       const pages = db.collection('pages');
       await pages.insertOne(page);
 
+      // store the links
+      const links = db.collection('links');
+
+      // create an entry for this page
+      await links.updateOne({
+        url: page.url,
+        host: page.host
+      }, { $set: {
+        source: url,
+        sourceHost: hostname,
+        host: hostname,
+        url: url,
+        visited: true,
+        status: resp.status
+      } }, { upsert: true});
+
+      // update any instances that may exist (so we don't revisit)
+      await links.updateMany({ url: url }, { $set: { visited: true, status: resp.status }});
+
+      // handle visited links
+      const visitedLinks = await links.find({ visited: { $eq: true }, url: { $in: hrefs }}).toArray();
+      const lookup: LinkLookup = visitedLinks.reduce<LinkLookup>((h, link) => {
+        h[link.url] = {
+          visited: link.visited,
+          status: link.status
+        };
+        return h;
+      }, {});
+
+      const pageLinks: Array<Link> = hrefs.map(link => ({
+        source: url,
+        sourceHost: hostname,
+        host: getHostname(link),
+        url: link,
+        visited: lookup[link] ? lookup[link].visited : false,
+        status: lookup[link] ? lookup[link].status: -1
+      }));
+
+      // add in all the links found
+      await links.insertMany(pageLinks);
+
       // k, all done
-      resolve(page)
+      resolve(pageLinks)
     }).catch((err) => {
       if (err.response) {
         logger(`${url} failed with error code ${err.response.status}`);
@@ -69,5 +117,5 @@ export const getPage = (url: string): Promise<Page> => {
 }
 
 export default {
-  getPage
+  processPage
 }
