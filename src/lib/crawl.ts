@@ -4,7 +4,6 @@ import debug from 'debug';
 import { Link, Page } from './types';
 import { forever } from 'async';
 
-const LINKS: Array<string> = [];
 const STATE = {
   processing: 0
 };
@@ -21,46 +20,46 @@ const storage = new MongoClient('mongodb://root:root@localhost:27018');
 export const crawl = async (start: string) => {
   logger(`starting with ${start}`);
 
-  LINKS.push(start);
-
   await storage.connect();
-
   const db = storage.db('crawler');
-  const links = db.collection('links');
-  const unvisited = await links.find({
-    visited: {
-      $ne: true
-    }
-  }).toArray();
 
-  unvisited.forEach(({url}) => LINKS.push(url));
-  
+  const pages = db.collection('pages');
+  const page = pages.findOne<Page>({
+    url: start
+  });
+
+  if (page == null) {
+    await processPage(start);
+  }
+
   forever(async next => {
-    if (LINKS.length > 0 && STATE.processing < 10) {
-      const link = LINKS.shift();
-
-      if (typeof link === 'string') {
-        const db = storage.db('page');
-        const pages = db.collection('pages');
-        const page: null | Page = await pages.findOne<Page>({ url: link});
-        
-        if (page) {
-          return next();
+    if (STATE.processing < 4) {
+      const links = db.collection('links');
+      const unvisited = await links.findOne<Link>({
+        status: {
+          $eq: -1
+        },
+        visited: {
+          $ne: true
         }
+      });
+
+      if (unvisited !== null) {
+        const link = unvisited.url;
 
         try {
           STATE.processing++;
-          const links: Array<Link> = await processPage(link);
-          links.filter(link => !link.visited).forEach(({url}) => LINKS.push(url));
+          await processPage(link);
           logger(`retrieved page ${link}`);
         } catch (err) {
-          logger(`failed to retrieve ${link}`)
+          logger(`failed to retrieve ${link} -- ${err}`);
         } finally {
           STATE.processing--;
         }
-
-        return setTimeout(next, 500);
-
+  
+        return setTimeout(next, 250);
+      } else {
+        logger(`nop`)
       }
     }
 
