@@ -1,12 +1,8 @@
 import { MongoClient } from 'mongodb';
 import { processPage } from './page';
 import debug from 'debug';
-import { Link, Page } from './types';
+import { ToBeVisited, Page } from './types';
 import { forever } from 'async';
-
-const STATE = {
-  processing: 0
-};
 
 const logger = debug('crawler');
 
@@ -24,43 +20,35 @@ export const crawl = async (start: string) => {
   const db = storage.db('crawler');
 
   const pages = db.collection('pages');
-  const page = pages.findOne<Page>({
+  const page = await pages.findOne<Page>({
     url: start
   });
 
-  if (page == null) {
+  if (page === null) {
     await processPage(start);
   }
 
   forever(async next => {
-    if (STATE.processing < 4) {
-      const links = db.collection('links');
-      const unvisited = await links.findOne<Link>({
-        status: {
-          $eq: -1
-        },
-        visited: {
-          $ne: true
-        }
-      });
+    await storage.connect();
+    const db = storage.db('crawler');    
+    const queue = db.collection('queue');
+    const nextVisit = await queue.findOne<ToBeVisited>();
 
-      if (unvisited !== null) {
-        const link = unvisited.url;
+    if (nextVisit !== null) {
+      const link = nextVisit.url;
 
-        try {
-          STATE.processing++;
-          await processPage(link);
-          logger(`retrieved page ${link}`);
-        } catch (err) {
-          logger(`failed to retrieve ${link} -- ${err}`);
-        } finally {
-          STATE.processing--;
-        }
-  
-        return setTimeout(next, 250);
-      } else {
-        logger(`nop`)
+      try {
+        const page = await processPage(link);
+        logger(`retrieved page ${page.url}`);
+      } catch (err) {
+        logger(`failed to retrieve ${link} -- ${err}`);
+      } finally {
+        await queue.deleteMany({
+          url: nextVisit.url
+        });
       }
+
+      return setTimeout(next, 250);
     }
 
     // try again in a bit
