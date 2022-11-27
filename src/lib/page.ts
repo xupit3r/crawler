@@ -1,10 +1,12 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'whatwg-url';
 import { MongoClient } from 'mongodb';
 import debug from 'debug';
-import { Link, LinkLookup, Page, ToBeVisited } from './types';
+import { Link, Page } from './types';
 import axiosConfig from './config/axios.json';
+import { savePage, updateQueue } from './storage';
+import { hostname } from 'os';
 
 const requester = axios.create(axiosConfig);
 
@@ -40,6 +42,14 @@ const hasProto = (url: string): boolean => {
   }
 }
 
+const okToStoreResponse = (response: AxiosResponse) => {
+  if (typeof response.headers['content-type'] === 'string') {
+    return response.headers['content-type'].indexOf('text/html') > -1;
+  }
+
+  return false;
+}
+
 /**
  * Given a url this will retrieve and process the content, 
  * returning a Page.
@@ -47,8 +57,27 @@ const hasProto = (url: string): boolean => {
  * @param url the url for which we want to retrieve a Page for
  */
 export const processPage = (url: string): Promise<Page> => {
+  const hostname = getHostname(url);
+
   return new Promise((resolve, reject) => {
     requester.get(url).then(async resp => {
+
+      // if we are not going to store the response
+      // then just create an "other" entry and bail
+      if (!okToStoreResponse(resp)) {
+        const page: Page = {
+          host: hostname,
+          url: url,
+          type: 'other',
+          data: '',
+          status: resp.status
+        };
+
+        await savePage(page);
+
+        return resolve(page);
+      }
+
       const html = resp.data;
       const $ = cheerio.load(html);
       const hrefs = $('a').toArray().map(anchor => {
@@ -56,85 +85,42 @@ export const processPage = (url: string): Promise<Page> => {
         return href ? href.value : '';
       }).filter(hasProto).map(link => makeAbsolute(link, url));
   
-      const hostname = getHostname(url);
-  
       const page: Page = {
-        url: url,
-        host: hostname,
-        html: html
-      };
-  
-      // add the page to storage for safe keeping
-      await storage.connect();
-      const db = storage.db('crawler');
-  
-      // store the page
-      const pages = db.collection('pages');
-      await pages.insertOne(page);
-  
-      // store the links
-      const links = db.collection('links');
-      const queue = db.collection('queue');
-  
-      // create an entry for this page
-      await links.updateOne({
-        url: page.url,
-        host: page.host
-      }, { $set: {
-        source: url,
-        sourceHost: hostname,
         host: hostname,
         url: url,
-        visited: true,
+        type: 'html',
+        data: html,
         status: resp.status
-      } }, { upsert: true});
-  
-      // update any instances that may exist (so we don't revisit)
-      await links.updateMany({ url: url }, { $set: { visited: true, status: resp.status }});
-  
-      // handle visited links
-      const visitedLinks = await links.find({ visited: { $eq: true }, url: { $in: hrefs }}).toArray();
-      const lookup: LinkLookup = visitedLinks.reduce<LinkLookup>((h, link) => {
-        h[link.url] = {
-          visited: link.visited,
-          status: link.status
-        };
-        return h;
-      }, {});
-  
+      };
+
       const pageLinks: Array<Link> = hrefs.map(link => ({
         source: url,
         sourceHost: hostname,
         host: getHostname(link),
-        url: link,
-        visited: lookup[link] ? lookup[link].visited : false,
-        status: lookup[link] ? lookup[link].status: -1
+        url: link
       }));
-      const toBeVisited: Array<ToBeVisited> = pageLinks.filter(link => !link.visited).map(link => ({
-        url: link.url
-      }));
-  
-      // add in all the links found
-      if (pageLinks.length) {
-        await links.insertMany(pageLinks);
-      }
 
-      if (toBeVisited.length) {
-        await queue.insertMany(toBeVisited);
-      }
+      // update our storage with the page/links
+      // and add any new links to the queue
+      await savePage(page, pageLinks);
+      await updateQueue(pageLinks);
 
       resolve(page);
     }).catch(async (err: AxiosError) => {
-      await storage.connect();
-      const db = storage.db('crawler');
-      const links = db.collection('links');
-      
+      const page: Page = {
+        host: getHostname(url),
+        url: url,
+        type: 'error',
+        data: err.message,
+        status: -100
+      };
+
       if (err.response) {
-        await links.updateMany({ url: url }, { $set: { visited: true, status: err.response.status }});
-      } else {
-        await links.updateMany({ url: url }, { $set: { visited: true, status: -100 }});
+        page.status = err.response.status;
       }
-  
+
+      await savePage(page);
+
       logger(`${url} failed with error code ${err}`);
 
       reject(err);

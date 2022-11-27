@@ -1,7 +1,9 @@
 export type Page = {
   url: string
   host: string
-  html: string
+  status: number
+  type: 'html' | 'error' | 'other'
+  data: string
 };
 
 export type Link = {
@@ -9,19 +11,10 @@ export type Link = {
   sourceHost: string
   host: string
   url: string
-  visited: boolean
-  status: number
 }
 
 export type ToBeVisited = {
   url: string
-}
-
-export type LinkLookup = {
-  [key: string]: {
-    visited: boolean,
-    status: number
-  }
 }
 
 export type State = {
