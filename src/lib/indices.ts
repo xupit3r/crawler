@@ -12,8 +12,8 @@ export const createIndices = async () => {
 
   logger('creating links status: 1, unvisited: 1 index');
   await db.collection('links').createIndex({
-    status: 1,
-    unvisited: 1
+    url: 1,
+    sourceUrl: 1
   });
 
   logger('indices created');

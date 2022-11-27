@@ -3,6 +3,7 @@ import { processPage } from './page';
 import debug from 'debug';
 import { ToBeVisited, Page } from './types';
 import { forever } from 'async';
+import { url } from 'inspector';
 
 const logger = debug('crawler');
 
@@ -13,19 +14,23 @@ const storage = new MongoClient('mongodb://root:root@localhost:27018');
  * 
  * @param start the URL to start crawling from
  */
-export const crawl = async (start: string) => {
-  logger(`starting with ${start}`);
+export const crawl = async (start: string = '') => {
+  if (url.length) {
+    await storage.connect();
+    const db = storage.db('crawler');
+  
+    const pages = db.collection('pages');
+    const page = await pages.findOne<Page>({
+      url: start
+    });
+  
+    if (page === null) {
+      await processPage(start);
+    }
 
-  await storage.connect();
-  const db = storage.db('crawler');
-
-  const pages = db.collection('pages');
-  const page = await pages.findOne<Page>({
-    url: start
-  });
-
-  if (page === null) {
-    await processPage(start);
+    logger(`starting with ${start}`);
+  } else {
+    logger('reading from queue');
   }
 
   forever(async next => {

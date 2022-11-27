@@ -1,3 +1,6 @@
 import { crawl } from './lib/crawl';
+import { createIndices } from './lib/indices';
 
-crawl('http://thejoeshow.net');
+createIndices();
+
+crawl();
