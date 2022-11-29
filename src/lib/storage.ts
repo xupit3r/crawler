@@ -1,10 +1,19 @@
+import * as dotenv from 'dotenv';
 import { MongoClient } from "mongodb";
 import debug from 'debug';
 import { Page, Link, ToBeVisited } from './types';
+import { exit } from 'process';
 
 const logger = debug('storage');
 
-const storage = new MongoClient('mongodb://root:root@localhost:27018');
+dotenv.config();
+
+if (typeof process.env.MONGO_CONNECT_STRING === 'undefined') {
+  logger('MONGO_CONNECT_STRING must be defined in .env');
+  exit(-1);
+}
+
+const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
 
 /**
  * Saves a page in storage. Updates all necessary
@@ -36,6 +45,23 @@ export const savePage = async (page: Page, pageLinks: Array<Link> = []) => {
     }, { $set: pageLink }, { upsert: true });
   }
   
+}
+
+/**
+ * Looksup up a page by its URL
+ * 
+ * @param url the url of the page we want to retrieve
+ * @returns a Promise that resolves to a Page or null if the page 
+ * does not exist
+ */
+export const getPage = async (url: string): Promise<Page | null> => {
+  await storage.connect();
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+
+  return await pages.findOne<Page>({
+    url: url
+  });
 }
 
 /**
@@ -74,4 +100,33 @@ export const updateQueue = async (pageLinks: Array<Link>) => {
     logger(`adding page ${toBeVisited.length} links to the queue.`);
     await queue.insertMany(toBeVisited);
   }
+}
+
+
+/**
+ * Will remove all instances of a particular URL from the queue
+ * 
+ * @param url the url to remove form the queue
+ */
+export const removeFromQueue = async (url: string) => {
+  await storage.connect();
+  const db = storage.db('crawler');    
+  const queue = db.collection('queue');
+
+  await queue.deleteMany({
+    url: url
+  });
+}
+
+/**
+ * Pulls the next link to visit from the queue
+ * 
+ * @returns the next link to visit
+ */
+export const getNextLink = async (): Promise<ToBeVisited | null> => {
+  await storage.connect();
+  const db = storage.db('crawler');    
+  const queue = db.collection('queue');
+
+  return await queue.findOne<ToBeVisited>();
 }

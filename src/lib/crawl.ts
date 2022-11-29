@@ -1,13 +1,9 @@
-import { MongoClient } from 'mongodb';
 import { processPage } from './page';
 import debug from 'debug';
-import { ToBeVisited, Page } from './types';
 import { forever } from 'async';
-import { url } from 'inspector';
+import { getNextLink, getPage, removeFromQueue } from './storage';
 
 const logger = debug('crawler');
-
-const storage = new MongoClient('mongodb://root:root@localhost:27018');
 
 /**
  * Simple crawler. Give it a URL, it does its thing.
@@ -15,14 +11,8 @@ const storage = new MongoClient('mongodb://root:root@localhost:27018');
  * @param start the URL to start crawling from
  */
 export const crawl = async (start: string = '') => {
-  if (url.length) {
-    await storage.connect();
-    const db = storage.db('crawler');
-  
-    const pages = db.collection('pages');
-    const page = await pages.findOne<Page>({
-      url: start
-    });
+  if (start.length) {
+    const page = await getPage(start);
   
     if (page === null) {
       await processPage(start);
@@ -34,10 +24,7 @@ export const crawl = async (start: string = '') => {
   }
 
   forever(async next => {
-    await storage.connect();
-    const db = storage.db('crawler');    
-    const queue = db.collection('queue');
-    const nextVisit = await queue.findOne<ToBeVisited>();
+    const nextVisit = await getNextLink();
 
     if (nextVisit !== null) {
       const link = nextVisit.url;
@@ -48,9 +35,7 @@ export const crawl = async (start: string = '') => {
       } catch (err) {
         logger(`failed to retrieve ${link} -- ${err}`);
       } finally {
-        await queue.deleteMany({
-          url: nextVisit.url
-        });
+        await removeFromQueue(nextVisit.url);
       }
 
       return setTimeout(next, 250);
