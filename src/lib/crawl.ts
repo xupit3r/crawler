@@ -1,7 +1,7 @@
 import { processPage } from './page';
 import debug from 'debug';
 import { forever } from 'async';
-import { getNextLink, getPage, removeFromQueue } from './storage';
+import { getNextLink, getPage } from './storage';
 
 const logger = debug('crawler');
 

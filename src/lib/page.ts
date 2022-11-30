@@ -6,7 +6,6 @@ import debug from 'debug';
 import { Link, Page } from './types';
 import axiosConfig from './config/axios.json';
 import { savePage, updateQueue } from './storage';
-import { hostname } from 'os';
 
 const requester = axios.create(axiosConfig);
 
