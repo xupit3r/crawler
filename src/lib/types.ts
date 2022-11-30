@@ -15,6 +15,8 @@ export type Link = {
 
 export type ToBeVisited = {
   url: string
+  host: string
+  date: Date
 }
 
 export type State = {

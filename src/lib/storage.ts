@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb";
 import debug from 'debug';
 import { Page, Link, ToBeVisited } from './types';
 import { exit } from 'process';
+import { getHostname } from './utils';
 
 const logger = debug('storage');
 
@@ -93,7 +94,9 @@ export const updateQueue = async (pageLinks: Array<Link>) => {
   const toBeVisited: Array<ToBeVisited> = pageLinks.filter(link =>
     visitedLinks.findIndex(({ url }) => link.url === url) === -1
   ).map(link => ({
-    url: link.url
+    url: link.url,
+    host: getHostname(link.url),
+    date: new Date()
   }));
 
   if (toBeVisited.length) {

@@ -1,53 +1,14 @@
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
-import { URL } from 'whatwg-url';
-import { MongoClient } from 'mongodb';
 import debug from 'debug';
 import { Link, Page } from './types';
 import axiosConfig from './config/axios.json';
 import { savePage, updateQueue } from './storage';
+import { getHostname, okToStoreResponse, hasProto, makeAbsolute} from './utils';
 
 const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
-
-const storage = new MongoClient('mongodb://root:root@localhost:27018');
-
-/**
- * Creates an absolute URL from a possibly relative URL
- * 
- * @param url the URL to possibly make absolute
- * @param base the base/source URL needed to make it absolute
- * @returns an absolute URL
- */
-const makeAbsolute = (url: string, base: string): string => {
-  const full = new URL(url, base);
-
-  return full.href;
-}
-
-const getHostname = (url: string): string => {
-  const parsed = new URL(url);
-
-  return parsed.hostname;
-}
-
-const hasProto = (url: string): boolean => {
-  try {
-    const parsed = new URL(url);
-    return !!parsed.protocol;
-  } catch (err) {
-    return false;
-  }
-}
-
-const okToStoreResponse = (response: AxiosResponse) => {
-  if (typeof response.headers['content-type'] === 'string') {
-    return response.headers['content-type'].indexOf('text/html') > -1;
-  }
-
-  return false;
-}
 
 /**
  * Given a url this will retrieve and process the content, 
