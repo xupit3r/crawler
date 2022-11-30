@@ -24,3 +24,8 @@ export type State = {
     [key: string]: boolean
   }
 }
+
+export type CrawlerOptions = {
+  start: string
+  limitTo: string
+}

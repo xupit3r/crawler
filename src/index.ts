@@ -3,4 +3,7 @@ import { createIndices } from './lib/indices';
 
 createIndices();
 
-crawl();
+crawl({
+  start: '',
+  limitTo: ''
+});

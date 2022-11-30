@@ -125,9 +125,10 @@ export const removeFromQueue = async (url: string) => {
  * Pulls the next link to visit from the queue and removes that 
  * and any other instances from the queue.
  * 
+ * @param limitTo if set, this will limit links to a specified hostname
  * @returns the next link to visit
  */
-export const getNextLink = async (): Promise<ToBeVisited | null> => {
+export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | null> => {
   await storage.connect();
 
   const session = storage.startSession();
@@ -144,7 +145,9 @@ export const getNextLink = async (): Promise<ToBeVisited | null> => {
     const db = storage.db('crawler');    
     const queue = db.collection('queue');
   
-    nextVisit = await queue.findOne<ToBeVisited>({}, {
+    nextVisit = await queue.findOne<ToBeVisited>(limitTo.length
+      ? { host: limitTo }
+      : {}, {
       sort: {
         _id: 1
       }
