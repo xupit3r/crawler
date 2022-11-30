@@ -119,14 +119,45 @@ export const removeFromQueue = async (url: string) => {
 }
 
 /**
- * Pulls the next link to visit from the queue
+ * Pulls the next link to visit from the queue and removes that 
+ * and any other instances from the queue.
  * 
  * @returns the next link to visit
  */
 export const getNextLink = async (): Promise<ToBeVisited | null> => {
   await storage.connect();
-  const db = storage.db('crawler');    
-  const queue = db.collection('queue');
 
-  return await queue.findOne<ToBeVisited>();
+  const session = storage.startSession();
+
+  let nextVisit = null;
+
+  try {
+    session.startTransaction({
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+      readPreference: 'primary'
+    });
+
+    const db = storage.db('crawler');    
+    const queue = db.collection('queue');
+  
+    nextVisit = await queue.findOne<ToBeVisited>({}, {
+      sort: {
+        _id: 1
+      }
+    });
+  
+    if (nextVisit !== null) {
+      await removeFromQueue(nextVisit.url)
+    }
+
+    await session.commitTransaction();
+  } catch (err) {
+    logger('failed to retrieve next item in queue');
+    await session.abortTransaction();
+  } finally {
+    await session.endSession();
+  }
+
+  return nextVisit;
 }

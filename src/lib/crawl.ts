@@ -28,14 +28,13 @@ export const crawl = async (start: string = '') => {
 
     if (nextVisit !== null) {
       const link = nextVisit.url;
+      
 
       try {
         const page = await processPage(link);
         logger(`retrieved page ${page.url}`);
       } catch (err) {
         logger(`failed to retrieve ${link} -- ${err}`);
-      } finally {
-        await removeFromQueue(nextVisit.url);
       }
 
       return setTimeout(next, 250);
