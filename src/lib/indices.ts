@@ -16,6 +16,12 @@ export const createIndices = async () => {
     sourceUrl: 1
   });
 
+  logger('creating queue host: 1, _id: 1');
+  await db.collection('links').createIndex({
+    host: 1,
+    _id: 1
+  });
+
   logger('creating TTL index for cooldown');
   await db.collection('cooldown').createIndex({
     expireAt: 1
