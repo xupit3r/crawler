@@ -57,6 +57,10 @@ export const okToStoreResponse = (response: AxiosResponse) => {
   return false;
 }
 
+export const isCoolDownStatus = (status: number) => {
+  return status === 429;
+}
+
 export default {
   makeAbsolute,
   getHostname,

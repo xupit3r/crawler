@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import debug from 'debug';
-import { Link, Page } from './types';
+import { Link, Page, CrawlerError } from './types';
 import axiosConfig from './config/axios.json';
 import { savePage, updateQueue } from './storage';
 import { getHostname, okToStoreResponse, hasProto, makeAbsolute} from './utils';
@@ -67,23 +67,35 @@ export const processPage = (url: string): Promise<Page> => {
 
       resolve(page);
     }).catch(async (err: AxiosError) => {
+      const host = getHostname(url);
+
       const page: Page = {
-        host: getHostname(url),
+        host: host,
         url: url,
         type: 'error',
         data: err.message,
         status: -100
       };
 
+      const crawlerError: CrawlerError = {
+        host: host,
+        url: url,
+        status: -100,
+        message: err.message,
+        headers: {}
+      }
+
       if (err.response) {
         page.status = err.response.status;
+        crawlerError.status = err.response.status;
+        crawlerError.headers = err.response.headers;
       }
 
       await savePage(page);
 
-      logger(`${url} failed with error code ${err}`);
+      logger(`${url} failed with error code ${crawlerError.status}`);
 
-      reject(err);
+      reject(crawlerError);
     });
   })
 }

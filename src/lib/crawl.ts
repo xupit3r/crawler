@@ -1,8 +1,9 @@
 import { processPage } from './page';
 import debug from 'debug';
 import { forever } from 'async';
-import { getNextLink, getPage } from './storage';
-import { CrawlerOptions } from './types';
+import { addHostToCooldown, getNextLink, getPage } from './storage';
+import { CrawlerError, CrawlerOptions } from './types';
+import { isCoolDownStatus } from './utils';
 
 const logger = debug('crawler');
 
@@ -38,7 +39,18 @@ export const crawl = async (options: CrawlerOptions) => {
         const page = await processPage(link);
         logger(`retrieved page ${page.url}`);
       } catch (err) {
-        logger(`failed to retrieve ${link} -- ${err}`);
+        let crawlerError = err as CrawlerError;
+
+        logger(`failed to retrieve ${link} -- ${crawlerError.message}`);
+
+        if (isCoolDownStatus(crawlerError.status)) {
+          const waitTime: number = (typeof crawlerError.headers['Retry-After'] !== 'undefined' 
+            ? Number.parseInt(crawlerError.headers['Retry-After']) 
+            : 3600
+          );
+
+          await addHostToCooldown(crawlerError.host, waitTime);
+        }
       }
 
       return setTimeout(next, 250);

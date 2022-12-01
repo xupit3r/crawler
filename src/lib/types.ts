@@ -1,3 +1,5 @@
+import { AxiosResponseHeaders } from "axios";
+
 export type Page = {
   url: string
   host: string
@@ -28,4 +30,12 @@ export type State = {
 export type CrawlerOptions = {
   start: string
   limitTo: string
+}
+
+export type CrawlerError = {
+  host: string
+  url: string
+  status: number
+  message: string,
+  headers: Partial<Record<string, string>>
 }

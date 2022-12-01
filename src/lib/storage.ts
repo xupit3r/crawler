@@ -100,7 +100,7 @@ export const updateQueue = async (pageLinks: Array<Link>) => {
   }));
 
   if (toBeVisited.length) {
-    logger(`adding page ${toBeVisited.length} links to the queue.`);
+    logger(`adding ${toBeVisited.length} links to the queue.`);
     await queue.insertMany(toBeVisited);
   }
 }
@@ -144,14 +144,16 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
 
     const db = storage.db('crawler');    
     const queue = db.collection('queue');
+    const cooldown = db.collection('cooldown');
+
+    const cooldownHosts = (await cooldown.find().toArray()).map(doc => doc.hostname);
   
-    nextVisit = await queue.findOne<ToBeVisited>(limitTo.length
-      ? { host: limitTo }
-      : {}, {
-      sort: {
-        _id: 1
-      }
-    });
+    nextVisit = await queue.findOne<ToBeVisited>({
+      $and: [
+        { host: { $nin: cooldownHosts } },
+        limitTo.length ? { host: limitTo }: {}, 
+      ]
+    }, { sort: { _id: 1 }});
   
     if (nextVisit !== null) {
       await removeFromQueue(nextVisit.url)
@@ -159,11 +161,34 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
 
     await session.commitTransaction();
   } catch (err) {
-    logger('failed to retrieve next item in queue');
+    logger(`failed to retrieve next item in queue ${err}`);
     await session.abortTransaction();
   } finally {
     await session.endSession();
   }
 
   return nextVisit;
+}
+
+/**
+ * Adds a hostname to list of hostnames to avoid
+ * 
+ * @param hostname the hostname to cooldown
+ * @param time amount of time (in seconds) to let it cooloff
+ */
+export const addHostToCooldown = async (hostname: string, time: number) => {
+  await storage.connect();
+  const db = storage.db('crawler');    
+  const cooldown = db.collection('cooldown');
+
+  const expirationDate = new Date();
+
+  expirationDate.setSeconds(expirationDate.getSeconds() + time);
+
+  logger(`adding ${hostname} to cooldown until ${expirationDate}`);
+
+  await cooldown.insertOne({
+    expireAt: expirationDate,
+    hostname: hostname
+  });
 }

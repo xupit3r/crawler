@@ -16,5 +16,12 @@ export const createIndices = async () => {
     sourceUrl: 1
   });
 
+  logger('creating TTL index for cooldown');
+  await db.collection('cooldown').createIndex({
+    expireAt: 1
+  }, {
+    expireAfterSeconds: 0
+  });
+
   logger('indices created');
 }
