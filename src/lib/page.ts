@@ -8,6 +8,18 @@ import { getHostname, okToStoreResponse, hasProto, makeAbsolute} from './utils';
 
 const requester = axios.create(axiosConfig);
 
+
+// prevent handling of responses that are not HTML
+axios.interceptors.response.use((response) => {
+  if (!okToStoreResponse(response)) {
+    return response;
+  }
+
+  return Promise.reject(new Error('cannot process'));
+}, (error) => {
+  return Promise.reject(error);
+});
+
 const logger = debug('page');
 
 /**
