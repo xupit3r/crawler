@@ -20,21 +20,21 @@ export const processPage = async (url: string) => {
   const hostname = getHostname(url);
 
   try {
+    // grab the page
+    const resp = await requester.get(url, {
+      responseType: 'document'
+    });
 
-    // perform a preflight request to see if this is 
-    // something we want to handle, bail if not
-    const preflight = await requester.options(url);
-    
-    if (!okToStoreResponse(preflight)) {
+    // bail if this is not something we want to store
+    if (!okToStoreResponse(resp)) {
       throw new AxiosError(
         'Will not process',
         'BAD_RESPONSE_TYPE',
-        preflight.request,
-        preflight
+        resp.request,
+        resp
       );
     }
 
-    const resp = await requester.get(url);
     const html = resp.data;
     const $ = cheerio.load(html);
     const hrefs = $('a').toArray().map(anchor => {
@@ -94,7 +94,7 @@ export const processPage = async (url: string) => {
 
     logger(`${url} failed with error code ${crawlerError.status}`);
 
-    return crawlerError;
+    throw crawlerError;
   }
 }
 

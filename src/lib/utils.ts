@@ -60,6 +60,13 @@ export const okToStoreResponse = (response: AxiosResponse) => {
   return false;
 }
 
+/**
+ * Determines if a supplied status is that of a "cooldown"
+ * type (e.g. "Too many requests" - 429)
+ * 
+ * @param status the status to check
+ * @returns true if this is a cooldown status, false otherwise
+ */
 export const isCoolDownStatus = (status: number) => {
   return status === 429;
 }
