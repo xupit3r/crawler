@@ -17,7 +17,7 @@ export const createIndices = async () => {
   });
 
   logger('creating queue host: 1, _id: 1');
-  await db.collection('links').createIndex({
+  await db.collection('queue').createIndex({
     host: 1,
     _id: 1
   });

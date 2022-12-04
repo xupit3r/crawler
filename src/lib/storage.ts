@@ -147,13 +147,24 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
     const cooldown = db.collection('cooldown');
 
     const cooldownHosts = await cooldown.distinct('hostname');
+
+    let query = {};
+    if (limitTo.length > 0) {
+      query = {
+        $and: [
+          { host: { $nin: cooldownHosts }},
+          { host: limitTo }
+        ]
+      };
+    } else if (cooldownHosts.length > 0) {
+      query = {
+        host: { $nin: cooldownHosts }
+      };
+    } else {
+      query = {};
+    }
   
-    nextVisit = await queue.findOne<ToBeVisited>({
-      $and: [
-        { host: { $nin: cooldownHosts } },
-        limitTo.length ? { host: limitTo }: {}, 
-      ]
-    }, { sort: { _id: 1 }});
+    nextVisit = await queue.findOne<ToBeVisited>(query, { sort: { _id: 1 }});
   
     if (nextVisit !== null) {
       await removeFromQueue(nextVisit.url)
