@@ -4,7 +4,7 @@ import debug from 'debug';
 import { Link, Page, CrawlerError } from './types';
 import axiosConfig from './config/axios.json';
 import { savePage, updateQueue } from './storage';
-import { getHostname, okToStoreResponse, hasProto, makeAbsolute} from './utils';
+import { getHostname, okToStoreResponse, hasProto, normalizeUrl} from './utils';
 
 const requester = axios.create(axiosConfig);
 
@@ -55,7 +55,7 @@ export const processPage = (url: string): Promise<Page> => {
       const hrefs = $('a').toArray().map(anchor => {
         const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
         return href ? href.value : '';
-      }).filter(hasProto).map(link => makeAbsolute(link, url));
+      }).filter(hasProto).map(link => normalizeUrl(link, url));
   
       const page: Page = {
         host: hostname,

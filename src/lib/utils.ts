@@ -8,8 +8,11 @@ import { URL } from 'whatwg-url';
  * @param url the URL to possibly make absolute
  * @param base the base/source URL needed to make it absolute
  */
- export const makeAbsolute = (url: string, base: string): string => {
+ export const normalizeUrl = (url: string, base: string): string => {
   const full = new URL(url, base);
+
+  // do not include hashes...
+  full.hash = '';
 
   return full.href;
 }
@@ -62,7 +65,7 @@ export const isCoolDownStatus = (status: number) => {
 }
 
 export default {
-  makeAbsolute,
+  normalizeUrl,
   getHostname,
   hasProto,
   okToStoreResponse
