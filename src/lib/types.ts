@@ -1,4 +1,4 @@
-import { AxiosResponseHeaders } from "axios";
+import { ObjectId } from "mongodb";
 
 export type Page = {
   url: string
@@ -16,6 +16,7 @@ export type Link = {
 }
 
 export type ToBeVisited = {
+  _id?: undefined | ObjectId
   url: string
   host: string
   date: Date

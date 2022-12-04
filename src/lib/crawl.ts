@@ -1,7 +1,7 @@
 import { processPage } from './page';
 import debug from 'debug';
 import { forever } from 'async';
-import { addHostToCooldown, getNextLink, getPage } from './storage';
+import { addHostToCooldown, getNextLink, getPage, removeFromQueue } from './storage';
 import { CrawlerError, CrawlerOptions } from './types';
 import { isCoolDownStatus } from './utils';
 
@@ -34,6 +34,7 @@ export const crawl = async (options: CrawlerOptions) => {
     if (nextVisit !== null) {
       const link = nextVisit.url;
       
+      logger(`processing ${link}`);
 
       try {
         const page = await processPage(link);
@@ -51,6 +52,8 @@ export const crawl = async (options: CrawlerOptions) => {
 
           await addHostToCooldown(crawlerError.host, waitTime);
         }
+      } finally {
+        await removeFromQueue(nextVisit.url);
       }
 
       return setTimeout(next, 250);

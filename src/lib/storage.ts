@@ -152,22 +152,34 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
     if (limitTo.length > 0) {
       query = {
         $and: [
+          { processing: { $ne: true }},
           { host: { $nin: cooldownHosts }},
           { host: limitTo }
         ]
       };
     } else if (cooldownHosts.length > 0) {
       query = {
-        host: { $nin: cooldownHosts }
+        $and: [
+          { processing: { $ne: true }},
+          { host: { $nin: cooldownHosts }}
+        ]
       };
     } else {
-      query = {};
+      query = {
+        processing: { $ne: true }
+      };
     }
   
     nextVisit = await queue.findOne<ToBeVisited>(query, { sort: { _id: 1 }});
   
     if (nextVisit !== null) {
-      await removeFromQueue(nextVisit.url)
+      queue.updateMany({
+        _id: nextVisit._id
+      }, {
+        $set: {
+          processing: true
+        }
+      });
     }
 
     await session.commitTransaction();
