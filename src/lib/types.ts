@@ -1,4 +1,5 @@
 import { ObjectId } from "mongodb";
+import { Worker } from "worker_threads";
 
 export type Page = {
   url: string
@@ -44,4 +45,8 @@ export type CrawlerError = {
   status: number
   message: string,
   headers: Partial<Record<string, string>>
+}
+
+export type WorkerRegister = {
+  [id: string]: Worker
 }

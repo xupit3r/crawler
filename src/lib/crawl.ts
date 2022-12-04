@@ -1,15 +1,20 @@
 import { processPage } from './page';
 import debug from 'debug';
+import { exit } from 'process';
 import { forever } from 'async';
-import { addHostToCooldown, getNextLink, getPage, removeFromQueue } from './storage';
-import { CrawlerError, CrawlerOptions } from './types';
-import { isCoolDownStatus } from './utils';
+import { v4 as uuid } from 'uuid';
+import { getNextLink, getPage, cleanup } from './storage';
+import { CrawlerOptions, WorkerRegister } from './types';
+import { Worker } from 'worker_threads';
 
 const logger = debug('crawler');
 
-const requests: Array<() => Promise<Boolean>> = [];
+const MAX_WORKERS = 2;
+const workers: WorkerRegister = {};
 
-const MAX_REQUESTS = 5;
+const state = {
+  exiting: false
+};
 
 /**
  * Simple crawler. Give it a URL, it does its thing.
@@ -32,52 +37,59 @@ export const crawl = async (options: CrawlerOptions) => {
     logger('reading from queue');
   }
 
-  forever(next => {
+  forever(async next => {
+    if (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
+      const nextVisit = await getNextLink(options.limitTo);
 
-    if (requests.length < MAX_REQUESTS) {
-      const currentIdx = requests.length - 1;
-
-      requests.push(async () :Promise<Boolean> => {
-        const nextVisit = await getNextLink(options.limitTo);
-
-        if (nextVisit !== null) {
-          const link = nextVisit.url;
-          
-          logger(`processing ${link}`);
-    
-          try {
-            const page = await processPage(link);
-            logger(`retrieved page ${page.url}`);
-          } catch (err) {
-            let crawlerError = err as CrawlerError;
-    
-            logger(`failed to retrieve ${link} -- ${crawlerError.message}`);
-    
-            if (isCoolDownStatus(crawlerError.status)) {
-              const waitTime: number = (typeof crawlerError.headers['Retry-After'] !== 'undefined' 
-                ? Number.parseInt(crawlerError.headers['Retry-After']) 
-                : 3600
-              );
-    
-              await addHostToCooldown(crawlerError.host, waitTime);
-            }
-          } finally {
-            await removeFromQueue(nextVisit.url);
-          }
-        }
-
-
-        return true;
-      });
-
-      requests[requests.length - 1]().then(() => {
-        requests.splice(currentIdx, 1);
-      });
-
-      return setTimeout(next, 200);
+      if (nextVisit !== null) {
+        const workerId = uuid();
+        const worker = new Worker('./src/lib/worker.js');
+        
+        logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
+  
+        worker.postMessage({
+          url: nextVisit.url,
+          workerId: workerId
+        });
+  
+        workers[workerId] = worker;
+  
+        worker.on('message', ({ workerId, url }) => {
+          logger(`COMPLETE: worker ${workerId} processed ${url}`);
+          delete workers[workerId];
+        });
+      }
     }
 
-    // try again in a bit
-    setTimeout(next, 1000);
+    setTimeout(next, 200);
   }, err => logger(`exiting...${err}`));
 }
+
+const gracefulExit = async () => {
+  state.exiting = true;
+
+  logger('cleaning up before exit...');
+
+  // wait for any running workers to exit...
+  forever(async next => {
+    if (Object.keys(workers).length === 0) {
+      await cleanup();
+      exit();
+    }
+
+    setTimeout(next, 25);
+  }, err => exit(1));
+}
+
+//do something when app is closing
+process.on('exit', gracefulExit);
+
+//catches ctrl+c event
+process.on('SIGINT', gracefulExit);
+
+// catches "kill pid" (for example: nodemon restart)
+process.on('SIGUSR1', gracefulExit);
+process.on('SIGUSR2', gracefulExit);
+
+//catches uncaught exceptions
+process.on('uncaughtException', gracefulExit);

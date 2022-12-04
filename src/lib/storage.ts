@@ -173,7 +173,7 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
     nextVisit = await queue.findOne<ToBeVisited>(query, { sort: { _id: 1 }});
   
     if (nextVisit !== null) {
-      queue.updateMany({
+      queue.updateOne({
         _id: nextVisit._id
       }, {
         $set: {
@@ -221,4 +221,20 @@ export const addHostToCooldown = async (hostname: string, time: number) => {
   
     await cooldown.insertOne(host);
   }
+}
+
+/**
+ * when we exit, do some stuff that will be sure
+ * we are not in a bad state
+ */
+export const cleanup = async () => {
+  await storage.connect();
+  
+  const db = storage.db('crawler');
+
+  await db.collection('queue').updateMany({}, {
+    $set: {
+      processing: false
+    }
+  });
 }
