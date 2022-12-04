@@ -21,6 +21,11 @@ export type ToBeVisited = {
   date: Date
 }
 
+export type CooldownHost = {
+  expireAt: Date
+  hostname: string
+}
+
 export type State = {
   processing: {
     [key: string]: boolean

@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import { MongoClient } from "mongodb";
 import debug from 'debug';
-import { Page, Link, ToBeVisited } from './types';
+import { Page, Link, ToBeVisited, CooldownHost } from './types';
 import { exit } from 'process';
 import { getHostname } from './utils';
 
@@ -146,7 +146,7 @@ export const getNextLink = async (limitTo: string = ''): Promise<ToBeVisited | n
     const queue = db.collection('queue');
     const cooldown = db.collection('cooldown');
 
-    const cooldownHosts = (await cooldown.find().toArray()).map(doc => doc.hostname);
+    const cooldownHosts = await cooldown.distinct('hostname');
   
     nextVisit = await queue.findOne<ToBeVisited>({
       $and: [
@@ -180,15 +180,22 @@ export const addHostToCooldown = async (hostname: string, time: number) => {
   await storage.connect();
   const db = storage.db('crawler');    
   const cooldown = db.collection('cooldown');
+  const coolDocs = await cooldown.distinct('hostname');
 
-  const expirationDate = new Date();
-
-  expirationDate.setSeconds(expirationDate.getSeconds() + time);
-
-  logger(`adding ${hostname} to cooldown until ${expirationDate}`);
-
-  await cooldown.insertOne({
-    expireAt: expirationDate,
-    hostname: hostname
-  });
+  // only add to the cooldown if the hostname doesn't currently
+  // exist within the collection
+  if (coolDocs.indexOf(hostname) === -1) {
+    const expirationDate = new Date();
+  
+    expirationDate.setSeconds(expirationDate.getSeconds() + time);
+  
+    logger(`adding ${hostname} to cooldown until ${expirationDate}`);
+  
+    const host: CooldownHost = {
+      expireAt: expirationDate,
+      hostname: hostname
+    }
+  
+    await cooldown.insertOne(host);
+  }
 }
