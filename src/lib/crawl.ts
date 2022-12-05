@@ -9,7 +9,7 @@ import { Worker } from 'worker_threads';
 
 const logger = debug('crawler');
 
-const MAX_WORKERS = 5;
+const MAX_WORKERS = 10;
 const workers: WorkerRegister = {};
 
 const state = {
@@ -33,40 +33,39 @@ export const crawl = async (options: CrawlerOptions) => {
     }
 
     logger(`starting with ${options.start}`);
-  } else {
-    logger('reading from queue');
   }
 
-  forever(async next => {
+  while(Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
     try {
-      if (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
-        const nextVisit = await getNextLink(options.limitTo);
+      const nextVisit = await getNextLink(options.limitTo);
+
+      if (nextVisit !== null) {
+        const workerId = uuid();
+        const worker = new Worker('./src/lib/worker.js');
+        
+        logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
   
-        if (nextVisit !== null) {
-          const workerId = uuid();
-          const worker = new Worker('./src/lib/worker.js');
-          
-          logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
-    
-          worker.postMessage({
-            url: nextVisit.url,
-            workerId: workerId
-          });
-    
-          workers[workerId] = worker;
-    
-          worker.on('message', ({ workerId, url }) => {
-            logger(`COMPLETE: worker ${workerId} processed ${url}`);
-            delete workers[workerId];
-          });
-        }
+        worker.postMessage({
+          url: nextVisit.url,
+          workerId: workerId
+        });
+  
+        workers[workerId] = worker;
+  
+        worker.on('message', async ({ workerId, url }) => {
+          logger(`COMPLETE: worker ${workerId} processed ${url}`);
+          await workers[workerId].terminate();
+          delete workers[workerId];
+        });
       }
     } catch (err) {
       logger(`crawler received err ${err}`);
     }
+  }
 
-    setTimeout(next, 200);
-  }, err => logger(`exiting...${err}`));
+  setTimeout(() => {
+    crawl(options)
+  }, 200);
 }
 
 const gracefulExit = async () => {
