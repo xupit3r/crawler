@@ -9,7 +9,7 @@ import { Worker } from 'worker_threads';
 
 const logger = debug('crawler');
 
-const MAX_WORKERS = 2;
+const MAX_WORKERS = 5;
 const workers: WorkerRegister = {};
 
 const state = {
@@ -38,27 +38,31 @@ export const crawl = async (options: CrawlerOptions) => {
   }
 
   forever(async next => {
-    if (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
-      const nextVisit = await getNextLink(options.limitTo);
-
-      if (nextVisit !== null) {
-        const workerId = uuid();
-        const worker = new Worker('./src/lib/worker.js');
-        
-        logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
+    try {
+      if (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
+        const nextVisit = await getNextLink(options.limitTo);
   
-        worker.postMessage({
-          url: nextVisit.url,
-          workerId: workerId
-        });
-  
-        workers[workerId] = worker;
-  
-        worker.on('message', ({ workerId, url }) => {
-          logger(`COMPLETE: worker ${workerId} processed ${url}`);
-          delete workers[workerId];
-        });
+        if (nextVisit !== null) {
+          const workerId = uuid();
+          const worker = new Worker('./src/lib/worker.js');
+          
+          logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
+    
+          worker.postMessage({
+            url: nextVisit.url,
+            workerId: workerId
+          });
+    
+          workers[workerId] = worker;
+    
+          worker.on('message', ({ workerId, url }) => {
+            logger(`COMPLETE: worker ${workerId} processed ${url}`);
+            delete workers[workerId];
+          });
+        }
       }
+    } catch (err) {
+      logger(`crawler received err ${err}`);
     }
 
     setTimeout(next, 200);
@@ -82,14 +86,30 @@ const gracefulExit = async () => {
 }
 
 //do something when app is closing
-process.on('exit', gracefulExit);
+process.on('exit', async () => {
+  logger('EXITING -- exit');
+  await gracefulExit();
+});
 
 //catches ctrl+c event
-process.on('SIGINT', gracefulExit);
+process.on('SIGINT', async () => {
+  logger('EXITING -- SIGINT');
+  await gracefulExit();
+});
 
 // catches "kill pid" (for example: nodemon restart)
-process.on('SIGUSR1', gracefulExit);
-process.on('SIGUSR2', gracefulExit);
+process.on('SIGUSR1', async () => {
+  logger('EXITING -- SIGUSR1');
+  await gracefulExit();
+});
+process.on('SIGUSR2', async () => {
+  logger('EXITING -- SIGUSR2');
+  await gracefulExit();
+});
 
 //catches uncaught exceptions
-process.on('uncaughtException', gracefulExit);
+process.on('uncaughtException', async (err) => {
+  logger('EXITING -- uncaughtException');
+  console.error(err);
+  await gracefulExit();
+});
