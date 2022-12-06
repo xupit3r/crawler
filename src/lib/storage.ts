@@ -232,7 +232,9 @@ export const cleanup = async () => {
   
   const db = storage.db('crawler');
 
-  await db.collection('queue').updateMany({}, {
+  await db.collection('queue').updateMany({
+    processing: true
+  }, {
     $set: {
       processing: false
     }
