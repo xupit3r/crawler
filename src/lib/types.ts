@@ -47,6 +47,11 @@ export type CrawlerError = {
   headers: Partial<Record<string, string>>
 }
 
+export type ErrorGenerated = {
+  page: Page
+  crawlerError: CrawlerError
+}
+
 export type WorkerRegister = {
   [id: string]: Worker
 }
