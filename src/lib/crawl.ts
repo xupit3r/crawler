@@ -1,7 +1,6 @@
 import { processPage } from './page';
 import debug from 'debug';
 import { exit } from 'process';
-import { forever } from 'async';
 import { v4 as uuid } from 'uuid';
 import { getNextLink, getPage, cleanup } from './storage';
 import { CrawlerOptions, WorkerRegister } from './types';
@@ -14,6 +13,7 @@ const workers: WorkerRegister = {};
 
 const state = {
   exiting: false,
+  exited: false,
   tries: 0
 };
 
@@ -36,7 +36,7 @@ export const crawl = async (options: CrawlerOptions) => {
     logger(`starting with ${options.start}`);
   }
 
-  while(Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
+  while (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
     try {
       const nextVisit = await getNextLink(options.limitTo);
 
@@ -72,37 +72,44 @@ export const crawl = async (options: CrawlerOptions) => {
 const gracefulExit = async () => {
   state.exiting = true;
 
-  logger('cleaning up before exit...');
-
-  // wait for any running workers to exit...
-  forever(async next => {
+  if (!state.exited) {
+    logger('cleaning up before exit...');
+  
+    // if everything already exited, we are done
     if (Object.keys(workers).length === 0) {
       await cleanup();
       exit();
-    } else {
-      state.tries++;
     }
-
-    // if we waited for 5 seconds and there are still
-    // workers, we are going to terminate them and then 
-    // cleanup the DB
-    if (state.tries === 10) {
-      const threads: Array<Worker> = Object.values(workers);
-
-      for (let i = 0; i < threads.length; i++) {
-        const worker = threads[i];
-        if (worker) {
-          await worker.terminate();
+  
+    // otheriwse, wait for any running workers to exit...
+    while (Object.keys(workers).length !== 0) {
+      // if we waited for 5 seconds and there are still
+      // workers, we are going to terminate them and then 
+      // cleanup the DB
+      if (state.tries === 10) {
+        const threads: Array<Worker> = Object.values(workers);
+  
+        logger('terminating unresponsive threads...');
+  
+        for (let i = 0; i < threads.length; i++) {
+          const worker = threads[i];
+          if (worker) {
+            await worker.terminate();
+          }
         }
+  
+        await cleanup();
+  
+        state.exited = true;
+        exit(1);
       }
-
-      await cleanup();
-
-      exit(1);
+  
+      state.tries++;
+      await new Promise(resolve => {
+        setTimeout(resolve, 500);
+      });
     }
-
-    setTimeout(next, 500);
-  }, err => exit(1));
+  }
 }
 
 //do something when app is closing

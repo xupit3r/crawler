@@ -18,7 +18,6 @@
   "author": "Joe D'Alessandro",
   "license": "ISC",
   "dependencies": {
-    "async": "^3.2.4",
     "axios": "^1.1.3",
     "cheerio": "*",
     "debug": "^3.2.7",
