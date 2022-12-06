@@ -13,7 +13,8 @@ const MAX_WORKERS = 10;
 const workers: WorkerRegister = {};
 
 const state = {
-  exiting: false
+  exiting: false,
+  tries: 0
 };
 
 /**
@@ -78,9 +79,29 @@ const gracefulExit = async () => {
     if (Object.keys(workers).length === 0) {
       await cleanup();
       exit();
+    } else {
+      state.tries++;
     }
 
-    setTimeout(next, 25);
+    // if we waited for 5 seconds and there are still
+    // workers, we are going to terminate them and then 
+    // cleanup the DB
+    if (state.tries === 10) {
+      const threads: Array<Worker> = Object.values(workers);
+
+      for (let i = 0; i < threads.length; i++) {
+        const worker = threads[i];
+        if (worker) {
+          await worker.terminate();
+        }
+      }
+
+      await cleanup();
+
+      exit(1);
+    }
+
+    setTimeout(next, 500);
   }, err => exit(1));
 }
 

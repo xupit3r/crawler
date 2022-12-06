@@ -24,16 +24,34 @@ export const createIndices = async () => {
     host: 1
   });
 
-  logger('creating links status: 1, unvisited: 1 index');
+  logger('creating pages url: 1 index');
+  await db.collection('pages').createIndex({
+    url: 1
+  });
+
+  logger('creating links url: 1, sourceUrl: 1 index');
   await db.collection('links').createIndex({
     url: 1,
     sourceUrl: 1
+  });
+
+
+  logger('creating links url: 1 index');
+  await db.collection('links').createIndex({
+    url: 1
   });
 
   logger('creating queue host: 1, _id: 1');
   await db.collection('queue').createIndex({
     host: 1,
     _id: 1
+  });
+
+
+  logger('creating queue host: 1, _id: 1');
+  await db.collection('queue').createIndex({
+    host: 1,
+    processing: 1
   });
 
   logger('creating TTL index for cooldown');

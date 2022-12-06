@@ -24,12 +24,19 @@ parentPort?.on('message', async ({ url, workerId}) => {
         : 3600
       );
 
-      await addHostToCooldown(crawlerError.host, waitTime);
+      try {
+        await addHostToCooldown(crawlerError.host, waitTime);
+      } catch (err) {
+        logger(`failed to add ${crawlerError.host} to cooldown ${err}`);
+      }
     }
   }
 
-
-  await removeFromQueue(url);
+  try {
+    await removeFromQueue(url);
+  } catch (err) {
+    logger(`failed to remove from the queue ${url} ${err}`)
+  }
 
   parentPort?.postMessage({
     url: url,
