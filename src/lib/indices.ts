@@ -29,22 +29,20 @@ export const createIndices = async () => {
     url: 1
   });
 
-  logger('creating links url: 1, sourceUrl: 1 index');
-  await db.collection('links').createIndex({
-    url: 1,
-    sourceUrl: 1
+  logger('creating pages text search index');
+  await db.collection('pages').createIndex({
+    url: 'text'
   });
 
-
-  logger('creating links url: 1 index');
-  await db.collection('links').createIndex({
-    url: 1
-  });
-
-  logger('creating queue host: 1, _id: 1');
+  logger('creating queue host: 1, processing: 1');
   await db.collection('queue').createIndex({
     host: 1,
-    _id: 1
+    processing: 1
+  });
+
+  logger('creating queue processing: 1');
+  await db.collection('queue').createIndex({
+    url: 1
   });
 
   logger('creating queue processing: 1');

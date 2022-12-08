@@ -23,7 +23,7 @@ const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
  * @param page the page to save in storage
  * @param pageLinks any links that were found within the page
  */
-export const savePage = async (page: Page, pageLinks: Array<Link> = []) => {
+export const savePage = async (page: Page) => {
   // add the page to storage for safe keeping
   await storage.connect();
 
@@ -35,17 +35,6 @@ export const savePage = async (page: Page, pageLinks: Array<Link> = []) => {
   logger(`saving page ${page.url}.`);
 
   await pages.insertOne(page);
-
-  // add in all the links found, if they do not already exist
-  for (let i = 0; i < pageLinks.length; i++) {
-    const pageLink = pageLinks[i];
-
-    await links.updateOne({
-      url: pageLink.url,
-      sourceUrl: page.url
-    }, { $set: pageLink }, { upsert: true });
-  }
-  
 }
 
 /**
@@ -96,7 +85,8 @@ export const updateQueue = async (pageLinks: Array<Link>) => {
   ).map(link => ({
     url: link.url,
     host: getHostname(link.url),
-    date: new Date()
+    date: new Date(),
+    processing: false
   }));
 
   if (toBeVisited.length) {

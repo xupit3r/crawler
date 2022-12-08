@@ -26,6 +26,7 @@ const generateError = (url: string, hostname: string, err: unknown): ErrorGenera
     url: url,
     type: 'error',
     data: '',
+    links: [],
     status: -100
   };
 
@@ -112,14 +113,6 @@ export const processPage = async (url: string) => {
       return href ? href.value : '';
     }).filter(hasProto).map(link => normalizeUrl(link, url));
 
-    const page: Page = {
-      host: hostname,
-      url: url,
-      type: 'html',
-      data: html,
-      status: resp.status
-    };
-
     const pageLinks: Array<Link> = hrefs.map(link => ({
       source: url,
       sourceHost: hostname,
@@ -127,9 +120,18 @@ export const processPage = async (url: string) => {
       url: link
     }));
 
+    const page: Page = {
+      host: hostname,
+      url: url,
+      type: 'html',
+      data: html,
+      status: resp.status,
+      links: pageLinks
+    };
+
     // update our storage with the page/links
     // and add any new links to the queue
-    await savePage(page, pageLinks);
+    await savePage(page);
     await updateQueue(pageLinks);
 
     return page;

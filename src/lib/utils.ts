@@ -17,6 +17,12 @@ import { URL } from 'whatwg-url';
   return full.href;
 }
 
+export const removeHash = (url: string) =>{
+  const full = new URL(url);
+  full.hash = '';
+  return full.href;
+}
+
 /**
  * Retrieves the hostname from a supplied url
  * 

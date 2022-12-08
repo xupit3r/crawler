@@ -1,14 +1,6 @@
 import { ObjectId } from "mongodb";
 import { Worker } from "worker_threads";
 
-export type Page = {
-  url: string
-  host: string
-  status: number
-  type: 'html' | 'error' | 'other'
-  data: string
-};
-
 export type Link = {
   source: string
   sourceHost: string
@@ -16,11 +8,21 @@ export type Link = {
   url: string
 }
 
+export type Page = {
+  url: string
+  host: string
+  status: number
+  type: 'html' | 'error' | 'other'
+  data: string,
+  links: Array<Link>
+};
+
 export type ToBeVisited = {
   _id?: undefined | ObjectId
   url: string
   host: string
   date: Date
+  processing: boolean
 }
 
 export type CooldownHost = {

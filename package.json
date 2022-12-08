@@ -6,7 +6,7 @@
   "scripts": {
     "start:dev": "nodemon",
     "start": "npm run build && node build/index.js",
-    "start:debug": "npm run build && DEBUG=process,crawler,crawler:work,page,storage node build/index.js",
+    "start:debug": "npm run build && DEBUG=process,crawler,crawler:work,page,storage,indices,reconfigure node build/index.js",
     "build": "rimraf ./build && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
