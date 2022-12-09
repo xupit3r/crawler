@@ -13,9 +13,13 @@ export type Page = {
   host: string
   status: number
   type: 'html' | 'error' | 'other'
-  data: string,
   links: Array<Link>
-};
+}
+
+export type WebData = {
+  data: string,
+  page: string
+}
 
 export type ToBeVisited = {
   _id?: undefined | ObjectId

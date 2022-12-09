@@ -1,9 +1,9 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
 import debug from 'debug';
-import { Link, Page, CrawlerError, ErrorGenerated } from './types';
+import { Link, Page, WebData, CrawlerError, ErrorGenerated } from './types';
 import axiosConfig from './config/axios.json';
-import { savePage, updateQueue } from './storage';
+import { savePage, saveWebData, updateQueue } from './storage';
 import { getHostname, okToStoreResponse, hasProto, normalizeUrl} from './utils';
 
 const requester = axios.create(axiosConfig);
@@ -25,7 +25,6 @@ const generateError = (url: string, hostname: string, err: unknown): ErrorGenera
     host: hostname,
     url: url,
     type: 'error',
-    data: '',
     links: [],
     status: -100
   };
@@ -46,7 +45,6 @@ const generateError = (url: string, hostname: string, err: unknown): ErrorGenera
     crawlerError.headers = err.response.headers;
 
     // set the messages
-    page.data = err.message;
     crawlerError.message = err.message;
   }
 
@@ -124,14 +122,18 @@ export const processPage = async (url: string) => {
       host: hostname,
       url: url,
       type: 'html',
-      data: html,
       status: resp.status,
       links: pageLinks
     };
 
-    // update our storage with the page/links
-    // and add any new links to the queue
-    await savePage(page);
+    const addedPage = await savePage(page);
+
+    const webData: WebData = {
+      data: html,
+      page: addedPage._id
+    };
+    await saveWebData(webData);
+    
     await updateQueue(pageLinks);
 
     return page;

@@ -100,3 +100,51 @@ export const normalizeQueueLinks = async () => {
 
   exit();
 }
+
+/**
+ * moves html off the page and into a separate collection
+ */
+export const moveHTML = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const webdata = db.collection('webdata');
+  
+  const cursor = pages.find({}).project({
+    _id: 1,
+    url: 1,
+    data: 1,
+    html: 1
+  });
+
+  logger('processing pages html');
+
+  while (await cursor.hasNext()) {
+    const page = await cursor.next();
+    
+    if (page) {
+      logger(`updating ${page.url}`);
+
+      // add a new record in the webdata collecton
+      await webdata.insertOne({
+        data: page.data,
+        page: new ObjectId(page._id)
+      });
+
+      // remove them from teh page
+      await pages.updateOne({
+        _id: new ObjectId(page._id)
+      }, {
+        $unset: {
+          html: '',
+          data: ''
+        }
+      });
+    }
+  }
+
+  logger('all pages updated.');
+
+  exit();
+}

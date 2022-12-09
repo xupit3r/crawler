@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
-import { MongoClient } from "mongodb";
+import { Document, MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
-import { Page, Link, ToBeVisited, CooldownHost } from './types';
+import { Page, Link, ToBeVisited, CooldownHost, WebData } from './types';
 import { exit } from 'process';
 import { getHostname } from './utils';
 
@@ -22,19 +22,37 @@ const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
  * 
  * @param page the page to save in storage
  * @param pageLinks any links that were found within the page
+ * @returns a Promise that resolves to the inserted doc
  */
-export const savePage = async (page: Page) => {
-  // add the page to storage for safe keeping
+export const savePage = async (page: Page): Promise<Document> => {
   await storage.connect();
 
-  // grab the collections
   const db = storage.db('crawler');
   const pages = db.collection('pages');
-  const links = db.collection('links');
   
   logger(`saving page ${page.url}.`);
 
-  await pages.insertOne(page);
+  return await pages.insertOne(page);
+}
+
+/**
+ * Add a page's data (e.g. HTML) to our web data collection
+ * 
+ * @param webData response data to save into our collection
+ * @returns a Promise that will resolve to the inserted doc
+ */
+export const saveWebData = async (webData: WebData): Promise<Document> => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const data = db.collection('webdata');
+
+  return await data.insertOne({
+    ...webData,
+    ...{
+      page: new ObjectId(webData.page)
+    }
+  })
 }
 
 /**
@@ -62,10 +80,8 @@ export const getPage = async (url: string): Promise<Page | null> => {
  * queue
  */
 export const updateQueue = async (pageLinks: Array<Link>) => {
-  // add the page to storage for safe keeping
   await storage.connect();
 
-  // grab the collections
   const db = storage.db('crawler');
   const pages = db.collection('pages');
   const queue = db.collection('queue');
