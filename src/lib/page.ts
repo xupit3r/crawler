@@ -4,7 +4,7 @@ import debug from 'debug';
 import { Link, Page, WebData, CrawlerError, ErrorGenerated } from './types';
 import axiosConfig from './config/axios.json';
 import { savePage, saveWebData, updateQueue } from './storage';
-import { getHostname, okToStoreResponse, hasProto, normalizeUrl} from './utils';
+import { getHostname, okToStoreResponse, hasProto, normalizeUrl, isBadExtension} from './utils';
 
 const requester = axios.create(axiosConfig);
 
@@ -62,6 +62,26 @@ const generateError = (url: string, hostname: string, err: unknown): ErrorGenera
  */
 export const processPage = async (url: string) => {
   const hostname = getHostname(url);
+
+  // just do a quick check of the extension
+  // before we attempt anything
+  if (isBadExtension(url)) {
+    await savePage({
+      host: hostname,
+      url: url,
+      type: 'error',
+      links: [],
+      status: -100
+    });
+
+    throw {
+      host: hostname,
+      url: url,
+      status: -100,
+      message: '',
+      headers: {}
+    };
+  }
 
   // try just grab the headers, if they are not 
   // of a type that we want to process bail
@@ -133,7 +153,7 @@ export const processPage = async (url: string) => {
       page: addedPage._id
     };
     await saveWebData(webData);
-    
+
     await updateQueue(pageLinks);
 
     return page;

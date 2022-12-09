@@ -8,7 +8,7 @@ import { Worker } from 'worker_threads';
 
 const logger = debug('crawler');
 
-const MAX_WORKERS = 10;
+const MAX_WORKERS = 5;
 const workers: WorkerRegister = {};
 
 const state = {

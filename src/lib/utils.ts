@@ -1,5 +1,12 @@
 import { AxiosResponse } from 'axios';
+import path from 'path';
 import { URL } from 'whatwg-url';
+
+const BAD_EXTENSIONS = [
+  'json',
+  'csv',
+  'xml'
+];
 
 /**
  * Creates an absolute URL from a possibly relative URL
@@ -59,11 +66,29 @@ export const hasProto = (url: string): boolean => {
  * @returns true if the response is OK, false otherwise
  */
 export const okToStoreResponse = (response: AxiosResponse) => {
+  const checks = {
+    contentType: false
+  };
+
   if (typeof response.headers['content-type'] === 'string') {
-    return response.headers['content-type'].indexOf('text/html') > -1;
+    checks.contentType = response.headers['content-type'].indexOf('text/html') > -1;
   }
 
-  return false;
+  return checks.contentType;
+}
+
+/**
+ * Checks for an obviously bad URL (to avoid LARGE file 
+ * downloads... hopefully)
+ * 
+ * @param requestUrl the url we are attempting to request
+ * @returns true if the extension is bad...
+ */
+export const isBadExtension = (requestUrl: string) => {
+  const url = new URL(requestUrl);
+  const extension = path.extname(url.pathname);
+  
+  return !BAD_EXTENSIONS.includes(extension);
 }
 
 /**
@@ -75,11 +100,4 @@ export const okToStoreResponse = (response: AxiosResponse) => {
  */
 export const isCoolDownStatus = (status: number) => {
   return status === 429;
-}
-
-export default {
-  normalizeUrl,
-  getHostname,
-  hasProto,
-  okToStoreResponse
 }
