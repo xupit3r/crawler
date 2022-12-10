@@ -1,3 +1,5 @@
+import { MobileNet } from "@tensorflow-models/mobilenet";
+import { string } from "@tensorflow/tfjs";
 import { ObjectId } from "mongodb";
 import { Worker } from "worker_threads";
 
@@ -13,7 +15,22 @@ export type Page = {
   host: string
   status: number
   type: 'html' | 'error' | 'other'
-  links: Array<Link>
+  links: Array<Link>,
+  images?: Array<ImageLink>
+}
+
+export type ImageLink = {
+  url: string
+  alt: string
+  categories?: Array<ImageClassification>
+}
+
+export type ImageClassification = {
+  className?: string
+  probability?: number
+  depth?: number
+  index?: number
+  err?: string
 }
 
 export type WebData = {
@@ -60,4 +77,8 @@ export type ErrorGenerated = {
 
 export type WorkerRegister = {
   [id: string]: Worker
+}
+
+export type ClassifyState = {
+  model?: MobileNet
 }

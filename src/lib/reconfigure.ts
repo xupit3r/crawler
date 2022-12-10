@@ -2,7 +2,8 @@ import * as dotenv from 'dotenv';
 import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
-import { removeHash } from './utils';
+import { isCoolDownStatus, removeHash } from './utils';
+import axios from 'axios';
 
 const logger = debug('reconfigure');
 
@@ -145,6 +146,63 @@ export const moveHTML = async () => {
   }
 
   logger('all pages updated.');
+
+  exit();
+}
+
+/**
+ * adds any missing HTML to the webdata collection
+ */
+export const getMissingHTML = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const webdata = db.collection('webdata');
+
+  const cursor = webdata.find({
+    data: 0
+  });
+
+  while (await cursor.hasNext()) {
+    const next = await cursor.next();
+
+    if (next !== null) {
+      const page = await pages.findOne({
+        _id: new ObjectId(next.page)
+      });
+
+      if (page !== null && page.type === 'html') {
+        logger(`retrieving HTML for ${page.url}`);
+
+        try {
+          const resp = await axios.get(page.url);
+          
+          await webdata.updateOne({
+            _id: new ObjectId(next._id)
+          }, {
+            $set: {
+              data: resp.data
+            }
+          });
+        } catch (err) {
+          if (axios.isAxiosError(err) && err.response) {
+            logger(`fuck! ${page.url} failed with ${err.response?.status}`);
+
+            if (!isCoolDownStatus(err.response.status)) {
+              await webdata.deleteOne({
+                _id: new ObjectId(next._id)
+              });
+            }
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+
+  logger('all missing HTML added');
 
   exit();
 }

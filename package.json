@@ -6,7 +6,7 @@
   "scripts": {
     "start:dev": "nodemon",
     "start": "npm run build && node build/index.js",
-    "start:debug": "npm run build && DEBUG=process,crawler,crawler:work,page,storage,indices,reconfigure node build/index.js",
+    "start:debug": "npm run build && DEBUG=process,crawler,crawler:work,learn,page,storage,classify,indices,reconfigure node build/index.js",
     "build": "rimraf ./build && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -18,11 +18,16 @@
   "author": "Joe D'Alessandro",
   "license": "ISC",
   "dependencies": {
+    "@tensorflow-models/mobilenet": "^2.1.0",
+    "@tensorflow/tfjs": "^4.1.0",
+    "@tensorflow/tfjs-node": "^4.1.0",
     "axios": "^1.1.3",
     "cheerio": "*",
     "debug": "^3.2.7",
     "dotenv": "^16.0.3",
     "mongodb": "^4.12.0",
+    "sharp": "^0.31.2",
+    "undici": "^5.14.0",
     "uuid": "^9.0.0",
     "whatwg-url": "^11.0.0"
   },
@@ -32,6 +37,7 @@
     "@types/dotenv": "^8.2.0",
     "@types/mongodb": "^4.0.7",
     "@types/node": "^18.11.9",
+    "@types/sharp": "^0.31.0",
     "@types/uuid": "^8.3.4",
     "@types/whatwg-url": "^11.0.0",
     "nodemon": "^2.0.20",

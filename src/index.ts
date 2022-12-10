@@ -1,15 +1,15 @@
 import { crawl } from './lib/crawl';
-import { moveLinks, normalizeQueueLinks, moveHTML } from './lib/reconfigure';
+import { addImageClassification } from './lib/learn';
+import { getMissingHTML } from './lib/reconfigure';
 import { createIndices } from './lib/indices';
 
 createIndices();
 
-crawl({
-  start: '',
-  limitTo: ''
-});
+// crawl({
+//   start: '',
+//   limitTo: ''
+// });
 
-// moveLinks();
-// normalizeQueueLinks();
+addImageClassification();
 
-// moveHTML();
+// getMissingHTML();

@@ -6,6 +6,6 @@
   "ignore": [],
   "exec": "ts-node ./src/index.ts",
   "env": {
-    "DEBUG": "crawler,page,storage"
+    "DEBUG": "crawler,page,storage,learn,classify,page:worker"
   }
 }
