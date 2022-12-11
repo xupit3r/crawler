@@ -4,7 +4,6 @@ import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
 import { ImageLink } from './types';
-import { classifyMany } from './classify';
 import { normalizeUrl } from './utils';
 
 const logger = debug('learn');
@@ -18,48 +17,86 @@ if (typeof process.env.MONGO_CONNECT_STRING === 'undefined') {
 
 const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
 
-const storeImages = async (pageId: ObjectId, url: string, classifiedImages: Array<ImageLink>) => {
+const storeImages = async (pageId: ObjectId, pageImages: Array<ImageLink>) => {
   await storage.connect();
   const db = storage.db('crawler');
   const pages = db.collection('pages');
   const images = db.collection('images');
 
-  if (classifiedImages.length) {
+  if (pageImages.length) {
     // remove any previous images
     await images.deleteMany({
       page: pageId
     });
 
     // add all the new images for the page
-    await images.insertMany(classifiedImages.map(img => {
+    await images.insertMany(pageImages.map(img => {
       return {
         page: pageId,
         ...img
       };
     }));
 
-    logger(`added ${classifiedImages.length} images for ${url}`);
+    logger(`added ${pageImages.length} images for ${pageId}`);
   } else {
-    logger(`no images to add for ${url}`);
+    logger(`no images to add for ${pageId}`);
   }
 
-  // mark this as having had image classification
-  return await pages.updateOne({
+  // mark this as having had image collection
+  await pages.updateOne({
     _id: pageId
   }, {
     $set: {
-      classifiedImages: true
+      images: true
     }
   });
+
+  return storage.close();
 }
 
-export const addImageClassification = async () => {
+const processImagesInHtml = async (pageId: ObjectId, pageUrl: string): Promise<Array<ImageLink>> => {
+  await storage.connect();
+  const db = storage.db('crawler');
+  const webdata = db.collection('webdata');
+
+  const html = await webdata.findOne({
+    page: pageId
+  });
+  await storage.close();
+
+  if (html !== null && typeof html.data === 'string') {
+    const $ = cheerio.load(html.data);
+    const imageTags = $('img');
+    const imageLinks: Array<ImageLink> = imageTags.get().filter((img) => {
+      const url = $(img).attr('src')
+      return !!url && normalizeUrl(url, pageUrl);
+    }).map((img) => {
+      const $el = $(img);
+      const url = $el.attr('src') || '';
+      const alt = $el.attr('alt') || '';
+      const depth = $el.parents().length;
+
+      return {
+        url: normalizeUrl(url, pageUrl),
+        depth: depth,
+        alt: alt,
+        classified: false
+      };
+    });
+    
+    return imageLinks;
+  }
+
+  logger(`no HTML data for ${pageUrl}`);
+  return [];
+}
+
+export const collectImages = async () => {
   await storage.connect();
   const db = storage.db('crawler');
   const pages = db.collection('pages');
-  const webdata = db.collection('webdata');
 
-  logger('running image classification');
+  logger('collecting images...');
 
   const pageDocs = await pages.find({
     $and: [{
@@ -73,41 +110,19 @@ export const addImageClassification = async () => {
     _id: 1,
     url: 1
   }).toArray();
+  
+  await storage.close();
 
   for (let i = 0; i < pageDocs.length; i++) {
     const pageDoc = pageDocs[i];
     const pageId = new ObjectId(pageDoc._id);
+    const pageUrl = pageDoc.url;
+    const images = await processImagesInHtml(pageId, pageUrl);
 
-    const html = await webdata.findOne({
-      page: pageId
-    });
-
-    if (html !== null && typeof html.data === 'string') {
-      const $ = cheerio.load(html.data);
-      const imageTags = $('img');
-      const imageLinks: Array<ImageLink> = imageTags.get().filter((img) => {
-        return !!$(img).attr('src');
-      }).map((img) => {
-        const $el = $(img);
-        const url = $el.attr('src') || '';
-        const alt = $el.attr('alt') || '';
-        const depth = $el.parents().length;
-
-        return {
-          url: normalizeUrl(url, pageDoc.url),
-          depth: depth,
-          alt: alt
-        };
-      });
-      
-      const classifiedImages = await classifyMany(imageLinks);
-
-      await storeImages(pageId, pageDoc.url, classifiedImages);
-      
-    } else {
-      logger(`no HTML data for ${pageDoc.url}`)
-    }
+    await storeImages(pageId, images);
   }
+
+  logger('image collection done.');
 
   exit();
 }

@@ -63,6 +63,7 @@ export const moveLinks = async () => {
   }
 
   logger('all links move.');
+
   exit();
 }
 
@@ -197,6 +198,48 @@ export const getMissingHTML = async () => {
   }
 
   logger('all missing HTML added');
+
+  exit();
+}
+
+export const fixImageFlags = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+
+  const cursor = pages.find({
+    $or: [{
+      classifiedImages: {
+        $eq: true
+      }
+    }, {
+      images: {
+        $eq: true
+      }
+    }]
+  }).project({
+    _id: 1
+  });
+
+  while (await cursor.hasNext()) {
+    const next = await cursor.next();
+
+    if (next !== null) {
+      pages.updateOne({
+        _id: next._id
+      }, {
+        $set: {
+          images: true
+        },
+        $unset: {
+          classifiedImages: ''
+        }
+      });
+    }
+  }
+
+  logger('updated image flags');
 
   exit();
 }

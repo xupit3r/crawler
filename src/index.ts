@@ -1,12 +1,12 @@
 import { crawl } from './lib/crawl';
-import { addImageClassification } from './lib/learn';
-import { getMissingHTML } from './lib/reconfigure';
+import { collectImages } from './lib/learn';
+import { fixImageFlags } from './lib/reconfigure';
 
-crawl({
-  start: '',
-  limitTo: ''
-});
+// crawl({
+//   start: '',
+//   limitTo: ''
+// });
 
-// addImageClassification();
+collectImages();
 
-// getMissingHTML();
+// fixImageFlags();

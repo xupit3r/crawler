@@ -15,14 +15,20 @@ export type Page = {
   host: string
   status: number
   type: 'html' | 'error' | 'other'
-  links: Array<Link>,
-  images?: Array<ImageLink>
+  links: Array<Link>
 }
 
 export type ImageLink = {
   url: string
   alt: string
+  depth: number
+  classified: boolean
   categories?: Array<ImageClassification>
+}
+
+export type RequestedImage = {
+  link: ImageLink
+  buffer: ArrayBuffer
 }
 
 export type ImageClassification = {

@@ -16,12 +16,16 @@ const BAD_EXTENSIONS = [
  * @param base the base/source URL needed to make it absolute
  */
  export const normalizeUrl = (url: string, base: string): string => {
-  const full = new URL(url, base);
-
-  // do not include hashes...
-  full.hash = '';
-
-  return full.href;
+  try {
+    const full = new URL(url, base);
+  
+    // do not include hashes...
+    full.hash = '';
+  
+    return full.href;
+  } catch (err) {
+    return '';
+  }
 }
 
 export const removeHash = (url: string) =>{
