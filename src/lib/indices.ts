@@ -34,6 +34,11 @@ export const createIndices = async () => {
     url: 'text'
   });
 
+  logger('creating webdata page index');
+  await db.collection('webdata').createIndex({
+    page: 1
+  });
+
   logger('creating queue host: 1, processing: 1');
   await db.collection('queue').createIndex({
     host: 1,

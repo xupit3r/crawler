@@ -2,8 +2,9 @@ import * as dotenv from 'dotenv';
 import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
-import { isCoolDownStatus, removeHash } from './utils';
-import axios from 'axios';
+import { fetch } from 'undici';
+import { removeHash } from './utils';
+import { createIndices } from './indices';
 
 const logger = debug('reconfigure');
 
@@ -176,25 +177,18 @@ export const getMissingHTML = async () => {
         logger(`retrieving HTML for ${page.url}`);
 
         try {
-          const resp = await axios.get(page.url);
+          const resp = await fetch(page.url);
+          const data = await resp.text();
           
           await webdata.updateOne({
             _id: new ObjectId(next._id)
           }, {
             $set: {
-              data: resp.data
+              data: data
             }
           });
         } catch (err) {
-          if (axios.isAxiosError(err) && err.response) {
-            logger(`fuck! ${page.url} failed with ${err.response?.status}`);
-
-            if (!isCoolDownStatus(err.response.status)) {
-              await webdata.deleteOne({
-                _id: new ObjectId(next._id)
-              });
-            }
-          }
+          logger(`failed with ${err}`);
         }
 
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -205,4 +199,11 @@ export const getMissingHTML = async () => {
   logger('all missing HTML added');
 
   exit();
+}
+
+/**
+ * updates our indices
+ */
+export const updateIndices = async () => {
+  await createIndices();
 }

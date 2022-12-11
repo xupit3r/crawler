@@ -1,5 +1,5 @@
-import { AxiosResponse } from 'axios';
 import path from 'path';
+import { Response } from 'undici';
 import { URL } from 'whatwg-url';
 
 const BAD_EXTENSIONS = [
@@ -65,13 +65,17 @@ export const hasProto = (url: string): boolean => {
  * @param response the response to check
  * @returns true if the response is OK, false otherwise
  */
-export const okToStoreResponse = (response: AxiosResponse) => {
+export const okToStoreResponse = (response: Response) => {
   const checks = {
     contentType: false
   };
 
-  if (typeof response.headers['content-type'] === 'string') {
-    checks.contentType = response.headers['content-type'].indexOf('text/html') > -1;
+  if (typeof response.headers.get('content-type') === 'string') {
+    const contentType = response.headers.get('content-type');
+
+    if (contentType !== null) {
+      checks.contentType = contentType.indexOf('text/html') > -1;
+    }
   }
 
   return checks.contentType;
@@ -88,7 +92,7 @@ export const isBadExtension = (requestUrl: string) => {
   const url = new URL(requestUrl);
   const extension = path.extname(url.pathname);
   
-  return !BAD_EXTENSIONS.includes(extension);
+  return BAD_EXTENSIONS.includes(extension);
 }
 
 /**

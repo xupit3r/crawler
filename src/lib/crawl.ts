@@ -82,19 +82,20 @@ const gracefulExit = async () => {
     }
   
     // otheriwse, wait for any running workers to exit...
-    while (Object.keys(workers).length !== 0) {
+    while (Object.keys(workers).length !== 0 && !state.exited) {
       // if we waited for 5 seconds and there are still
       // workers, we are going to terminate them and then 
       // cleanup the DB
       if (state.tries === 10) {
-        const threads: Array<Worker> = Object.values(workers);
+        const workerIds = Object.keys(workers);
   
         logger('terminating unresponsive threads...');
   
-        for (let i = 0; i < threads.length; i++) {
-          const worker = threads[i];
-          if (worker) {
-            await worker.terminate();
+        for (let i = 0; i < workerIds.length; i++) {
+          const workerId = workerIds[i];
+          if (workerId) {
+            await workers[workerId].terminate();
+            delete workers[workerId];
           }
         }
   

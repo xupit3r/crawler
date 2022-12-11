@@ -1,12 +1,9 @@
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import { fetch } from 'undici';
 import * as cheerio from 'cheerio';
 import debug from 'debug';
-import { Link, Page, WebData, CrawlerError, ErrorGenerated } from './types';
-import axiosConfig from './config/axios.json';
+import { Link, Page, WebData, CrawlerError, ErrorGenerated, RequestError } from './types';
 import { savePage, saveWebData, updateQueue } from './storage';
 import { getHostname, okToStoreResponse, hasProto, normalizeUrl, isBadExtension} from './utils';
-
-const requester = axios.create(axiosConfig);
 
 const logger = debug('page');
 
@@ -20,7 +17,7 @@ const logger = debug('page');
  * @returns ErrorGenerated which contains the Page and CrawlerError
  * associated with the error
  */
-const generateError = (url: string, hostname: string, err: unknown): ErrorGenerated => {
+const generateError = (url: string, hostname: string, err: RequestError): ErrorGenerated => {
   const page: Page = {
     host: hostname,
     url: url,
@@ -39,10 +36,16 @@ const generateError = (url: string, hostname: string, err: unknown): ErrorGenera
 
   // if this is an Axios error, attach additional
   // metadata to the Page and CrawlerError
-  if (axios.isAxiosError(err) && err.response) {
+  if (err.response) {
+    const headers: Partial<Record<string, string>> = {};
+
+    for (const pair of err.response.headers.entries()) {
+      headers[pair[0]] = pair[1];
+    }
+
     page.status = err.response.status;
     crawlerError.status = err.response.status;
-    crawlerError.headers = err.response.headers;
+    crawlerError.headers = headers;
 
     // set the messages
     crawlerError.message = err.message;
@@ -74,32 +77,35 @@ export const processPage = async (url: string) => {
       status: -100
     });
 
+    logger(`failed for a bad extension: ${url}`);
+
     throw {
       host: hostname,
       url: url,
       status: -100,
-      message: '',
+      message: 'Bad Extension: may be a large file',
       headers: {}
-    };
+    } as CrawlerError;
   }
 
   // try just grab the headers, if they are not 
   // of a type that we want to process bail
   try {
-    const head = await requester.head(url);
+    const head = await fetch(url, { method: 'HEAD' });
 
     if (!okToStoreResponse(head)) {
-      throw new AxiosError(
-        'Will not process',
-        'CRAWLER_BAD_RESPONSE_TYPE',
-        head.request,
-        head
-      );
+      throw {
+        message: 'Will not process',
+        type: 'CRAWLER_BAD_RESPONSE_TYPE',
+        url: url,
+        response: head
+      };
     }
   } catch (err) {
-    if (axios.isAxiosError(err) && 
-        err.code === 'CRAWLER_BAD_RESPONSE_TYPE') {
-      const { page, crawlerError } = generateError(url, hostname, err);
+    const error: RequestError = err as RequestError;
+
+    if (error.type === 'CRAWLER_BAD_RESPONSE_TYPE') {
+      const { page, crawlerError } = generateError(url, hostname, error);
       
       logger(`${url} will not be processed`);
 
@@ -110,21 +116,19 @@ export const processPage = async (url: string) => {
 
   try {
     // grab the page
-    const resp = await requester.get(url, {
-      responseType: 'document'
-    });
+    const resp = await fetch(url);
 
     // bail if this is not something we want to store
     if (!okToStoreResponse(resp)) {
-      throw new AxiosError(
-        'Will not process',
-        'BAD_RESPONSE_TYPE',
-        resp.request,
-        resp
-      );
+      throw {
+        message: 'Will not process',
+        type: 'CRAWLER_BAD_RESPONSE_TYPE',
+        url: url,
+        response: resp
+      };
     }
 
-    const html = resp.data;
+    const html = await resp.text();
     const $ = cheerio.load(html);
     const hrefs = $('a').toArray().map(anchor => {
       const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
@@ -158,9 +162,9 @@ export const processPage = async (url: string) => {
 
     return page;
   } catch (err) {
-    const { page, crawlerError } = generateError(url, hostname, err);
+    const { page, crawlerError } = generateError(url, hostname, err as RequestError);
 
-    logger(`${url} failed with error code ${crawlerError.status}`);
+    logger(`${url} failed with error code ${crawlerError.status} -- ${crawlerError.message}`);
     await savePage(page);
     throw crawlerError;
   }

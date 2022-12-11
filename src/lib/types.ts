@@ -1,6 +1,6 @@
 import { MobileNet } from "@tensorflow-models/mobilenet";
-import { string } from "@tensorflow/tfjs";
 import { ObjectId } from "mongodb";
+import { Response } from "undici";
 import { Worker } from "worker_threads";
 
 export type Link = {
@@ -60,6 +60,13 @@ export type State = {
 export type CrawlerOptions = {
   start: string
   limitTo: string
+}
+
+export type RequestError = {
+  message: string
+  type: string
+  url: string
+  response: Response
 }
 
 export type CrawlerError = {
