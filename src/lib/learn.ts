@@ -3,8 +3,10 @@ import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
-import { ImageLink } from './types';
+import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural';
+import { ImageLink, PageText } from './types';
 import { normalizeUrl } from './utils';
+import { updateIndices } from './reconfigure';
 
 const logger = debug('learn');
 
@@ -125,4 +127,76 @@ export const collectImages = async () => {
   logger('image collection done.');
 
   exit();
+}
+
+export const collectText = async () => {
+  await storage.connect();
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const webdata = db.collection('webdata');
+  const text = db.collection('text');
+
+  await updateIndices();
+
+  const cursor = await pages.find({
+    text: {
+      $ne: true
+    }
+  }).project({
+    _id: 1,
+    url: 1
+  });
+
+  while (await cursor.hasNext()) {
+    const page = await cursor.next();
+
+    if (page) {
+      const html = await webdata.findOne({
+        page: page._id
+      });
+
+      if (html && typeof html.data === 'string') {
+        const $ = cheerio.load(html.data);
+        const analyzer = new SentimentAnalyzer('English', PorterStemmer, 'afinn');
+        const tokenizer = new TreebankWordTokenizer();
+
+        // retrieve text nodes in document order
+        const pageTexts = $('html *').contents().map((i, element): PageText => {
+          const $el = $(element);
+
+          if (element.type === 'text' && $el.text().trim().length > 0) {
+            const nodeText = $el.text().trim();
+            const tokenized = tokenizer.tokenize(nodeText);
+
+            return {
+              parent: $el.parent().prop('tagName').toLowerCase(),
+              depth: $el.parents().length,
+              text: nodeText,
+              sentiment: analyzer.getSentiment(tokenized)
+            };
+          }
+
+          return {};
+        }).get().filter(node => typeof node.text !== 'undefined');
+
+
+        logger(`adding page text document for ${page.url}`);
+
+        // create a text document for this page
+        await text.insertOne({
+          page: page._id,
+          text: pageTexts
+        });
+
+        // indicate that we have added text for this page
+        await pages.updateOne({
+          _id: page._id
+        }, {
+          $set: {
+            text: true
+          }
+        });
+      }      
+    }
+  }
 }

@@ -29,9 +29,9 @@ export const createIndices = async () => {
     url: 1
   });
 
-  logger('creating pages text search index');
-  await db.collection('pages').createIndex({
-    url: 'text'
+  logger('creating text page index');
+  await db.collection('text').createIndex({
+    text: 1
   });
 
   logger('creating webdata page index');

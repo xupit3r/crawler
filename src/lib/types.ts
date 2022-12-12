@@ -26,6 +26,13 @@ export type ImageLink = {
   categories?: Array<ImageClassification>
 }
 
+export type PageText = {
+  parent?: string,
+  text?: string,
+  depth?: number,
+  sentiment?: number
+}
+
 export type RequestedImage = {
   link: ImageLink
   buffer: ArrayBuffer
