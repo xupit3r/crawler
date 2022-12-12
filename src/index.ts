@@ -1,12 +1,23 @@
+import { exit } from 'process';
 import { crawl } from './lib/crawl';
-import { collectImages } from './lib/learn';
-import { fixImageFlags } from './lib/reconfigure';
+import { updateIndices } from './lib/reconfigure';
+import { collectImages, collectText } from './lib/learn';
 
-// crawl({
-//   start: '',
-//   limitTo: ''
-// });
+const [ type ] = process.argv.slice(2);
 
-collectImages();
+if (type === 'crawl') {
+  crawl({
+    start: '',
+    limitTo: ''
+  });
+} else if (type === 'collectImages') {
+  collectImages();
+} else if (type === 'collectText') {
+  collectText();
+} else if (type === 'updateIndices') {
+  updateIndices();
+} else {
+  console.log(`argument type did not match a valid value`);
+  exit(1);
+}
 
-// fixImageFlags();
