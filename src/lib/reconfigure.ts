@@ -244,6 +244,53 @@ export const fixImageFlags = async () => {
   exit();
 }
 
+export const combineImages = async () => {
+  await storage.connect();
+
+  const db = storage.db();
+  const images = db.collection('images');
+
+  const distinctPages = await images.distinct('page');
+
+  for (let i = 0; i < distinctPages.length; i++) {
+    if (distinctPages[i]) {
+      const pageId = new ObjectId(distinctPages[i]);
+
+      const imageDocs = await images.find({
+        page: pageId
+      }).project({
+        _id: 1,
+        url: 1,
+        depth: 1,
+        alt: 1,
+        classified: 1,
+        categories: 1
+      }).toArray();
+
+      // remove the separate doc
+      await images.deleteMany({
+        page: pageId
+      });
+
+      // insert the combined doc
+      await images.insertOne({
+        page: pageId,
+        images: imageDocs.map(image => ({
+          url: image.url,
+          depth: image.depth,
+          alt: image.alt,
+          classified: image.classified || false,
+          categories: image.categories || []
+        }))
+      });
+
+      logger(`combined images for ${pageId}`);
+    }
+  }
+
+  exit();
+}
+
 /**
  * updates our indices
  */
