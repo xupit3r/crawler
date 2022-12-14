@@ -7,6 +7,7 @@ import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural'
 import { ImageLink, PageText } from './types';
 import { normalizeUrl } from './utils';
 import { updateIndices } from './reconfigure';
+import { getSummary } from './text';
 
 const logger = debug('learn');
 
@@ -207,4 +208,48 @@ export const collectText = async () => {
       }      
     }
   }
+
+  logger('text has been processed');
+
+  exit();
+}
+
+export const summarizeText = async () => {
+  await storage.connect();
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const text = db.collection('text');
+
+  const cursor = await text.find();
+
+  while (await cursor.hasNext()) {
+    const doc = await cursor.next();
+
+    if (doc) {
+      const relevants = doc.text.filter((pageText: PageText) => {
+        return pageText.parent === 'p' || pageText.parent === 'div';
+      });
+      const summary = getSummary(relevants);
+
+      logger(summary);
+
+      await text.updateOne({
+        _id: doc._id
+      }, {
+        $set: {
+          summary: summary
+        }
+      });
+
+      await pages.updateOne({
+        _id: doc.page
+      }, {
+        $set: {
+          summarized: true
+        }
+      });
+    }
+  }
+
+  exit();
 }

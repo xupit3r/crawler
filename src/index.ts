@@ -1,7 +1,7 @@
 import { exit } from 'process';
 import { crawl } from './lib/crawl';
 import { updateIndices, combineImages } from './lib/reconfigure';
-import { collectImages, collectText } from './lib/learn';
+import { collectImages, collectText, summarizeText } from './lib/learn';
 
 const [ type ] = process.argv.slice(2);
 
@@ -18,6 +18,8 @@ if (type === 'crawl') {
   updateIndices();
 } else if (type === 'combineImages') {
   combineImages();
+} else if (type === 'summarizeText') {
+  summarizeText();
 } else {
   console.log(`argument type did not match a valid value`);
   exit(1);

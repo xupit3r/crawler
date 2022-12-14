@@ -11,6 +11,7 @@
     "start:indices": "npm run build && DEBUG=indices node --inspect build/index.js updateIndices",
     "start:images": "npm run build && DEBUG=learn node --inspect build/index.js collectImages",
     "start:text": "npm run build && DEBUG=learn node --inspect build/index.js collectText",
+    "start:summarize": "npm run build && DEBUG=learn node --inspect build/index.js summarizeText",
     "start:combineImages": "npm run build && DEBUG=reconfigure node --inspect build/index.js combineImages",
     "build": "rimraf ./build && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -32,6 +33,7 @@
     "mongodb": "^4.12.0",
     "natural": "^5.2.4",
     "sharp": "^0.31.2",
+    "stopword": "^2.0.5",
     "undici": "^5.14.0",
     "uuid": "^9.0.0",
     "whatwg-url": "^11.0.0"
@@ -44,6 +46,7 @@
     "@types/natural": "^5.1.1",
     "@types/node": "^18.11.9",
     "@types/sharp": "^0.31.0",
+    "@types/stopword": "^2.0.0",
     "@types/uuid": "^8.3.4",
     "@types/whatwg-url": "^11.0.0",
     "nodemon": "^2.0.20",

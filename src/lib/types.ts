@@ -33,6 +33,11 @@ export type PageText = {
   sentiment?: number
 }
 
+export type WeightedText = {
+  pageText: PageText
+  weight: number
+}
+
 export type RequestedImage = {
   link: ImageLink
   buffer: ArrayBuffer
@@ -101,4 +106,8 @@ export type WorkerRegister = {
 
 export type ClassifyState = {
   model?: MobileNet
+}
+
+export type Lookup = {
+  [key: string]: number
 }
