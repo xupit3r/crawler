@@ -109,3 +109,15 @@ export const isBadExtension = (requestUrl: string) => {
 export const isCoolDownStatus = (status: number) => {
   return status === 429;
 }
+
+/**
+ * A utility that generates a sleep interval that resolves
+ * in the amount of time specified
+ * 
+ * @param time the amount of time to sleep
+ * @returns a promise that resolves in the specificed amount 
+ * of time
+ */
+export const sleep = async (time: number = 50) => {
+  return new Promise((resolve) => setTimeout(resolve, time));
+}

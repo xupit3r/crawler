@@ -5,10 +5,12 @@ import { v4 as uuid } from 'uuid';
 import { getNextLink, getPage, cleanup } from './storage';
 import { CrawlerOptions, WorkerRegister } from './types';
 import { Worker } from 'worker_threads';
+import { sleep } from './utils';
 
 const logger = debug('crawler');
 
 const MAX_WORKERS = 5;
+const WORKER_SCRIPT = './src/lib/workers/crawler.js';
 const workers: WorkerRegister = {};
 
 const state = {
@@ -36,37 +38,37 @@ export const crawl = async (options: CrawlerOptions) => {
     logger(`starting with ${options.start}`);
   }
 
-  while (Object.keys(workers).length < MAX_WORKERS && !state.exiting) {
-    try {
-      const nextVisit = await getNextLink(options.limitTo);
-
-      if (nextVisit !== null) {
-        const workerId = uuid();
-        const worker = new Worker('./src/lib/worker.js');
-        
-        logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
+  while (!state.exiting) {
+    if (Object.keys(workers).length < MAX_WORKERS) {
+      try {
+        const nextVisit = await getNextLink(options.limitTo);
   
-        worker.postMessage({
-          url: nextVisit.url,
-          workerId: workerId
-        });
-  
-        workers[workerId] = worker;
-  
-        worker.on('message', async ({ workerId, url }) => {
-          logger(`COMPLETE: worker ${workerId} processed ${url}`);
-          await workers[workerId].terminate();
-          delete workers[workerId];
-        });
+        if (nextVisit !== null) {
+          const workerId = uuid();
+          const worker = new Worker(WORKER_SCRIPT);
+          
+          logger(`STARTING: spawing worker ${workerId} to process ${nextVisit.url}`);
+    
+          worker.postMessage({
+            url: nextVisit.url,
+            workerId: workerId
+          });
+    
+          workers[workerId] = worker;
+    
+          worker.on('message', async ({ workerId, url }) => {
+            logger(`COMPLETE: worker ${workerId} processed ${url}`);
+            await workers[workerId].terminate();
+            delete workers[workerId];
+          });
+        }
+      } catch (err) {
+        logger(`crawler received err ${err}`);
       }
-    } catch (err) {
-      logger(`crawler received err ${err}`);
+    } else {
+      await sleep(50);
     }
   }
-
-  setTimeout(() => {
-    crawl(options)
-  }, 200);
 }
 
 const gracefulExit = async () => {
@@ -106,9 +108,7 @@ const gracefulExit = async () => {
       }
   
       state.tries++;
-      await new Promise(resolve => {
-        setTimeout(resolve, 500);
-      });
+      await sleep(50);
     }
   }
 }

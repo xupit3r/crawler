@@ -1,8 +1,41 @@
-import { TreebankWordTokenizer } from 'natural';
+import debug from 'debug';
+import * as cheerio from 'cheerio';
+import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural';
 import { removeStopwords } from 'stopword';
 import { Lookup, PageText, WeightedText } from './types';
 
+const logger = debug('text');
+
 const punctuation = /[!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~]/g;
+
+/**
+ * Extracts text from a specified HTML document
+ * 
+ * @param html the document from which we want to extract text
+ * @returns an array of PageText objects
+ */
+export const extractText = (html: string): Array<PageText> => {
+  try {
+    const $ = cheerio.load(html);
+
+    // retrieve text nodes in document order
+    const pageTexts = $('p,div').contents().map((i, element): PageText => {
+      const $el = $(element);
+      
+      return {
+        text: $el.text()
+      };
+    }).get().filter(node => typeof node.text !== 'undefined');
+
+    return pageTexts;
+  } catch (err) {
+    if (err instanceof RangeError) {
+      logger(`failed to extract text: ${err}`);
+    }
+
+    return [];
+  }
+}
 
 /**
  * Removes pesky punctuation from a string

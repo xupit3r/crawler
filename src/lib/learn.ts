@@ -3,11 +3,16 @@ import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
-import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural';
-import { ImageLink, PageText } from './types';
-import { normalizeUrl } from './utils';
+import { ImageLink, PageText, WorkerRegister } from './types';
+import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
 import { getSummary } from './text';
+import { v4 as uuid } from 'uuid';
+import { Worker } from 'worker_threads';
+
+const MAX_WORKERS = 5;
+const WORKER_SCRIPT = './src/lib/workers/texter.js';
+const workers: WorkerRegister = {};
 
 const logger = debug('learn');
 
@@ -149,63 +154,72 @@ export const collectText = async () => {
   });
 
   while (await cursor.hasNext()) {
-    const page = await cursor.next();
-
-    if (page) {
-      const html = await webdata.findOne({
-        page: page._id
-      });
-
-      if (html && typeof html.data === 'string') {
-        try {
-          const $ = cheerio.load(html.data);
-          const analyzer = new SentimentAnalyzer('English', PorterStemmer, 'afinn');
-          const tokenizer = new TreebankWordTokenizer();
+    if (Object.keys(workers).length < MAX_WORKERS) {
+      const page = await cursor.next();
+      
+      if (page) {
+        const html = await webdata.findOne({
+          page: page._id
+        });
   
-          // retrieve text nodes in document order
-          const pageTexts = $('html *').contents().map((i, element): PageText => {
-            const $el = $(element);
+        if (html && typeof html.data === 'string') {
+          try {
+            const workerId = uuid();
+            const worker = new Worker(WORKER_SCRIPT);
+            
+            logger(`STARTING: spawing worker ${workerId} to process ${page.url}`);
+      
+            worker.postMessage({
+              html: html.data,
+              workerId: workerId
+            });
+      
+            workers[workerId] = worker;
+      
+            worker.on('message', async ({ workerId, pageTexts }) => {
+              logger(`COMPLETE: worker ${workerId}`);
+              logger(`adding page text document for ${page.url}`);
+    
+              // create a text document for this page
+              if (pageTexts.length) {
+                await text.updateOne({
+                  page: page._id
+                }, {
+                  $set: {
+                    text: pageTexts
+                  }
+                }, { upsert: true});
+        
+                // indicate that we have added text for this page
+                await pages.updateOne({
+                  _id: page._id
+                }, {
+                  $set: {
+                    text: true
+                  }
+                });
+              } else {
+                // indicate that we could not retrieve page 
+                // texts
+                await pages.updateOne({
+                  _id: page._id
+                }, {
+                  $set: {
+                    text: false
+                  }
+                });
+              }
   
-            if (element.type === 'text' && $el.text().trim().length > 0) {
-              const nodeText = $el.text().trim();
-              const tokenized = tokenizer.tokenize(nodeText);
-  
-              return {
-                parent: $el.parent().prop('tagName').toLowerCase(),
-                depth: $el.parents().length,
-                text: nodeText,
-                sentiment: analyzer.getSentiment(tokenized)
-              };
-            }
-  
-            return {};
-          }).get().filter(node => typeof node.text !== 'undefined');
-  
-  
-          logger(`adding page text document for ${page.url}`);
-  
-          // create a text document for this page
-          await text.insertOne({
-            page: page._id,
-            text: pageTexts
-          });
-  
-          // indicate that we have added text for this page
-          await pages.updateOne({
-            _id: page._id
-          }, {
-            $set: {
-              text: true
-            }
-          });
-        } catch (err) {
-          if (err instanceof RangeError) {
-            logger(`failed to process text for ${page.url} --- ${err.message}`);
+              await workers[workerId].terminate();
+              delete workers[workerId];
+            });
+          } catch (err) {
+            logger(`failed to process text for ${page.url}`);
           }
-
-          logger(`failed to process text for ${page.url}`);
-        }
-      }      
+        }      
+      }
+    } else {
+      await sleep(50);
     }
   }
 

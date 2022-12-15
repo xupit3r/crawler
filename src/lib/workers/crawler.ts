@@ -1,11 +1,11 @@
-import { processPage } from './page';
+import { processPage } from '../page';
 import debug from 'debug';
-import { addHostToCooldown, removeFromQueue } from './storage';
-import { CrawlerError } from './types';
-import { isCoolDownStatus } from './utils';
+import { addHostToCooldown, removeFromQueue } from '../storage';
+import { CrawlerError } from '../types';
+import { isCoolDownStatus } from '../utils';
 import { parentPort } from 'worker_threads';
 
-const logger = debug('crawler:worker');
+const logger = debug('worker:crawler');
 
 parentPort?.on('message', async ({ url, workerId}) => {
   logger(`processing ${url}`);
