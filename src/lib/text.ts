@@ -2,7 +2,7 @@ import debug from 'debug';
 import * as cheerio from 'cheerio';
 import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural';
 import { removeStopwords } from 'stopword';
-import { Lookup, PageText, WeightedText } from './types';
+import { Lookup, PageText, TextRegister, WeightedText } from './types';
 
 const logger = debug('text');
 
@@ -19,15 +19,30 @@ export const extractText = (html: string): Array<PageText> => {
     const $ = cheerio.load(html);
 
     // retrieve text nodes in document order
-    const pageTexts = $('p,div').contents().map((i, element): PageText => {
+    const extracted = $('p,div').contents().map((i, element): PageText => {
       const $el = $(element);
+      const text = $el.text().replace(/\s+/g, ' ').trim();
       
       return {
-        text: $el.text()
+        text: text
       };
-    }).get().filter(node => typeof node.text !== 'undefined');
+    }).get().filter(pageText => {
+      return (
+        typeof pageText.text !== 'undefined' &&
+        pageText.text.length !== 0
+      );
+    });
 
-    return pageTexts;
+    // remove duplicates
+    const deduped = extracted.reduce((h: TextRegister, pageText: PageText): TextRegister => {
+      if (typeof pageText.text === 'string') {
+        h[pageText.text] = pageText;
+      }
+
+      return h;
+    }, {});
+
+    return Object.values(deduped);
   } catch (err) {
     if (err instanceof RangeError) {
       logger(`failed to extract text: ${err}`);
@@ -137,7 +152,7 @@ export const calcThreshold = (weighted: Array<WeightedText>): number => {
  * @returns a string that represents the page summary or 🤷‍♀️ if no summary 
  * could be generated
  */
-export const getSummary = (pageTexts: Array<PageText>): string => {
+export const calcSummary = (pageTexts: Array<PageText>): string => {
   const weighted = addWeights(pageTexts);
   const threshold = calcThreshold(weighted);
   const candidates = weighted.sort((a, b) => {
@@ -154,4 +169,23 @@ export const getSummary = (pageTexts: Array<PageText>): string => {
     ? summary
     : '🤷‍♀️'
   );
+}
+
+
+/**
+ * Given a set of page text documents, this will calculate the 
+ * sentiment of each page text
+ * 
+ * @param pageTexts the texts to calculate sentiment for
+ * @return an array of page text documents with sentiment calculations
+ * added
+ */
+export const calcSentiment = (pageTexts: Array<PageText>): Array<PageText> => {
+  const analyzer = new SentimentAnalyzer('English', PorterStemmer, 'afinn');
+
+  return pageTexts.map(pageText => {
+    const tokens: Array<string> = tokenizeSentence(pageText);
+    pageText.sentiment = analyzer.getSentiment(tokens);
+    return pageText;
+  });
 }

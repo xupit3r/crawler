@@ -5,11 +5,11 @@ import { PageText } from '../types';
 
 const logger = debug('worker:texter')
 
-parentPort?.on('message', ({ html, workerId }) => {
+parentPort?.on('message', ({ html, storage, workerId }) => {
   const pageTexts: Array<PageText> = extractText(html);
 
   logger('extracted page texts.');
-
+  
   parentPort?.postMessage({
     pageTexts: pageTexts,
     workerId: workerId

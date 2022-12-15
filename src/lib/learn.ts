@@ -6,7 +6,7 @@ import * as cheerio from 'cheerio';
 import { ImageLink, PageText, WorkerRegister } from './types';
 import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
-import { getSummary } from './text';
+import { calcSummary, calcSentiment } from './text';
 import { v4 as uuid } from 'uuid';
 import { Worker } from 'worker_threads';
 
@@ -163,23 +163,20 @@ export const collectText = async () => {
         });
   
         if (html && typeof html.data === 'string') {
-          try {
-            const workerId = uuid();
-            const worker = new Worker(WORKER_SCRIPT);
-            
-            logger(`STARTING: spawing worker ${workerId} to process ${page.url}`);
-      
-            worker.postMessage({
-              html: html.data,
-              workerId: workerId
-            });
-      
-            workers[workerId] = worker;
-      
-            worker.on('message', async ({ workerId, pageTexts }) => {
-              logger(`COMPLETE: worker ${workerId}`);
-              logger(`adding page text document for ${page.url}`);
+          const workerId = uuid();
+          const worker = new Worker(WORKER_SCRIPT);
+          
+          logger(`STARTING -- ${workerId}`);
     
+          worker.postMessage({
+            html: html.data,
+            workerId: workerId
+          });
+    
+          workers[workerId] = worker;
+    
+          worker.on('message', async ({ workerId, pageTexts }) => {
+            try {
               // create a text document for this page
               if (pageTexts.length) {
                 await text.updateOne({
@@ -188,7 +185,7 @@ export const collectText = async () => {
                   $set: {
                     text: pageTexts
                   }
-                }, { upsert: true});
+                }, { upsert: true });
         
                 // indicate that we have added text for this page
                 await pages.updateOne({
@@ -209,13 +206,15 @@ export const collectText = async () => {
                   }
                 });
               }
-  
+
+              logger(`COMPLETE -- ${workerId}`);
+            } catch (err) {
+              logger(`ERROR -- ${workerId} ${err}`);
+            } finally {
               await workers[workerId].terminate();
               delete workers[workerId];
-            });
-          } catch (err) {
-            logger(`failed to process text for ${page.url}`);
-          }
+            }
+          });
         }      
       }
     } else {
@@ -240,10 +239,7 @@ export const summarizeText = async () => {
     const doc = await cursor.next();
 
     if (doc) {
-      const relevants = doc.text.filter((pageText: PageText) => {
-        return pageText.parent === 'p' || pageText.parent === 'div';
-      });
-      const summary = getSummary(relevants);
+      const summary = calcSummary(doc.text);
 
       logger(summary);
 
@@ -266,4 +262,44 @@ export const summarizeText = async () => {
   }
 
   exit();
+}
+
+export const addSentiment = async () => {
+  await storage.connect();
+  
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const text = db.collection('text');
+
+  const cursor = await text.find({
+    text: {
+      $eq: true
+    }
+  });
+
+  while (cursor.hasNext()) {
+    const doc = await cursor.next();
+
+    if (doc) {
+      const pageTexts: Array<PageText> = calcSentiment(doc.text);
+
+      await text.updateOne({
+        _id: doc._id
+      }, {
+        $set: {
+          text: pageTexts
+        }
+      });
+
+      await pages.updateOne({
+        _id: doc.page
+      }, {
+        $set: {
+          sentiment: true
+        }
+      });
+    }
+  }
+
+  exit(1);
 }

@@ -104,6 +104,10 @@ export type WorkerRegister = {
   [id: string]: Worker
 }
 
+export type TextRegister = {
+  [key: string]: PageText 
+}
+
 export type ClassifyState = {
   model?: MobileNet
 }
