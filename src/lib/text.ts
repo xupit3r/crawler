@@ -7,6 +7,19 @@ import { Lookup, PageText, TextRegister, WeightedText } from './types';
 const logger = debug('text');
 
 const punctuation = /[!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~]/g;
+const spaces = /\s+/g;
+const newlines = /(\r\n|\n|\r)/gm;
+
+/**
+ * Removes duplicate spaces within the string and any newlines
+ * that might be present.
+ * 
+ * @param text text to "clean"
+ * @returns cleaned text
+ */
+export const cleanText = (text: string): string => {
+  return text.replace(spaces, ' ').replace(newlines, ' ').trim()
+}
 
 /**
  * Extracts text from a specified HTML document
@@ -18,13 +31,20 @@ export const extractText = (html: string): Array<PageText> => {
   try {
     const $ = cheerio.load(html);
 
-    // retrieve text nodes in document order
-    const extracted = $('p,div').contents().map((i, element): PageText => {
-      const $el = $(element);
-      const text = $el.text().replace(/\s+/g, ' ').trim();
-      
+    // grab the first instances of paragraphs in the document
+    // this should avoid instances where paragraphs exist within
+    // paragraphs... this will, obviously, miss text that is within
+    // divs (not wrapped in paragraphs), but the assumption is that 
+    // that text is not important...good enough assumption? we will see
+    const extracted = $('p:first-child,h1,h2,h3').map((i, element): PageText => {
+      const text = $(element).find(
+        ':not(code,script,style)'
+      ).addBack().contents().map((i, el) => {
+        return $(el).text();
+      }).get().join(' ');
+
       return {
-        text: text
+        text: cleanText(text)
       };
     }).get().filter(pageText => {
       return (
@@ -153,6 +173,10 @@ export const calcThreshold = (weighted: Array<WeightedText>): number => {
  * could be generated
  */
 export const calcSummary = (pageTexts: Array<PageText>): string => {
+  if (pageTexts.length === 1) {
+    return (pageTexts[0].text || '🤷‍♀️');
+  }
+
   const weighted = addWeights(pageTexts);
   const threshold = calcThreshold(weighted);
   const candidates = weighted.sort((a, b) => {

@@ -34,6 +34,16 @@ export const createIndices = async () => {
     text: 1
   });
 
+  logger('creating page sentiment index');
+  await db.collection('pages').createIndex({
+    sentiment: 1
+  });
+
+  logger('creating sparse text summary index');
+  await db.collection('text').createIndex({
+    summary: 1,
+  }, { sparse: true });
+
   logger('creating webdata page index');
   await db.collection('webdata').createIndex({
     page: 1

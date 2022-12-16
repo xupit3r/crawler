@@ -144,18 +144,16 @@ export const collectText = async () => {
 
   await updateIndices();
 
-  const cursor = await pages.find({
-    text: {
-      $ne: true
-    }
-  }).project({
+  const pageDocs = await pages.find().project({
     _id: 1,
     url: 1
-  });
+  }).toArray();
 
-  while (await cursor.hasNext()) {
+  let currentIdx = 0;
+
+  while (currentIdx < pageDocs.length) {
     if (Object.keys(workers).length < MAX_WORKERS) {
-      const page = await cursor.next();
+      const page = await pageDocs[currentIdx++];
       
       if (page) {
         const html = await webdata.findOne({
@@ -178,34 +176,26 @@ export const collectText = async () => {
           worker.on('message', async ({ workerId, pageTexts }) => {
             try {
               // create a text document for this page
-              if (pageTexts.length) {
-                await text.updateOne({
-                  page: page._id
-                }, {
-                  $set: {
-                    text: pageTexts
-                  }
-                }, { upsert: true });
-        
-                // indicate that we have added text for this page
-                await pages.updateOne({
-                  _id: page._id
-                }, {
-                  $set: {
-                    text: true
-                  }
-                });
-              } else {
-                // indicate that we could not retrieve page 
-                // texts
-                await pages.updateOne({
-                  _id: page._id
-                }, {
-                  $set: {
-                    text: false
-                  }
-                });
+              if (pageTexts.length == 0) {
+                logger(`NOTEXT -- ${page.url}`);
               }
+
+              await text.updateOne({
+                page: page._id
+              }, {
+                $set: {
+                  text: pageTexts
+                }
+              }, { upsert: true });
+      
+              // indicate that we have added text for this page
+              await pages.updateOne({
+                _id: page._id
+              }, {
+                $set: {
+                  extractedText: true
+                }
+              });
 
               logger(`COMPLETE -- ${workerId}`);
             } catch (err) {
@@ -233,15 +223,17 @@ export const summarizeText = async () => {
   const pages = db.collection('pages');
   const text = db.collection('text');
 
-  const cursor = await text.find();
+  const cursor = await text.find({
+    summary: {
+      $exists: false
+    }
+  });
 
   while (await cursor.hasNext()) {
     const doc = await cursor.next();
 
     if (doc) {
       const summary = calcSummary(doc.text);
-
-      logger(summary);
 
       await text.updateOne({
         _id: doc._id
@@ -264,6 +256,7 @@ export const summarizeText = async () => {
   exit();
 }
 
+
 export const addSentiment = async () => {
   await storage.connect();
   
@@ -271,35 +264,48 @@ export const addSentiment = async () => {
   const pages = db.collection('pages');
   const text = db.collection('text');
 
-  const cursor = await text.find({
-    text: {
-      $eq: true
+  await updateIndices();
+
+  const cursor = await pages.find({
+    sentiment: {
+      $ne: true
     }
+  }).project({
+    _id: 1,
+    url: 1
   });
+  
+  while (await cursor.hasNext()) {
+    const pageDoc = await cursor.next();
 
-  while (cursor.hasNext()) {
-    const doc = await cursor.next();
-
-    if (doc) {
-      const pageTexts: Array<PageText> = calcSentiment(doc.text);
-
-      await text.updateOne({
-        _id: doc._id
-      }, {
-        $set: {
-          text: pageTexts
-        }
+    if (pageDoc) {
+      const textDoc = await text.findOne({
+        page: pageDoc._id
       });
 
-      await pages.updateOne({
-        _id: doc.page
-      }, {
-        $set: {
-          sentiment: true
-        }
-      });
+      if (textDoc) {
+        logger(`adding sentiment to ${pageDoc.url}`);
+
+        const pageTexts = calcSentiment(textDoc.text);
+  
+        await text.updateOne({
+          _id: textDoc._id
+        }, {
+          $set: {
+            text: pageTexts
+          }
+        });
+  
+        await pages.updateOne({
+          _id: textDoc.page
+        }, {
+          $set: {
+            sentiment: true
+          }
+        });
+      }
     }
   }
 
-  exit(1);
+  exit();
 }
