@@ -22,6 +22,22 @@ export const cleanText = (text: string): string => {
 }
 
 /**
+ * Remove duplicates from a corpus of text.
+ * 
+ * @param pageTexts set of texts to dedupe
+ * @returns a version of the text corpus with any duplicated phrases removed
+ */
+export const dedupe = (pageTexts: Array<PageText>): Array<PageText> => {
+  return Object.values(pageTexts.reduce((h: TextRegister, pageText: PageText): TextRegister => {
+    if (typeof pageText.text === 'string') {
+      h[pageText.text] = pageText;
+    }
+
+    return h;
+  }, {}));
+}
+
+/**
  * Extracts text from a specified HTML document
  * 
  * @param html the document from which we want to extract text
@@ -29,40 +45,34 @@ export const cleanText = (text: string): string => {
  */
 export const extractText = (html: string): Array<PageText> => {
   try {
-    const $ = cheerio.load(html);
-
-    // grab the first instances of paragraphs in the document
-    // this should avoid instances where paragraphs exist within
-    // paragraphs... this will, obviously, miss text that is within
-    // divs (not wrapped in paragraphs), but the assumption is that 
-    // that text is not important...good enough assumption? we will see
-    const extracted = $('p:first-child,h1,h2,h3').map((i, element): PageText => {
-      const text = $(element).find(
-        ':not(code,script,style)'
-      ).addBack().contents().map((i, el) => {
-        return $(el).text();
-      }).get().join(' ');
-
+    const $ = cheerio.load(html);    
+    const allParagraphs = $('body p');
+    const text = allParagraphs.map((i, element): PageText => {
       return {
-        text: cleanText(text)
+        text: cleanText($(element).text())
       };
-    }).get().filter(pageText => {
+    }).get().filter((pageText: PageText) => {
       return (
         typeof pageText.text !== 'undefined' &&
-        pageText.text.length !== 0
-      );
+        pageText.text.split(/\s/).length > 1
+      )
     });
 
-    // remove duplicates
-    const deduped = extracted.reduce((h: TextRegister, pageText: PageText): TextRegister => {
-      if (typeof pageText.text === 'string') {
-        h[pageText.text] = pageText;
-      }
+    // now, keep text around that seems relevant to the general
+    // corpus of text found withing the document. not a summary,
+    // but just an attempt to keep the text gathered sane...
+    const base = dedupe(text);
+    const weighted = addWeights(base);
+    const threshold = calcThreshold(weighted);
+    const candidates = weighted.filter((value: WeightedText) => {
+      return value.weight >= threshold;
+    });
 
-      return h;
-    }, {});
-
-    return Object.values(deduped);
+    return candidates.map(weighted => {
+      return {
+        text: weighted.pageText.text?.trim()
+      };
+    });
   } catch (err) {
     if (err instanceof RangeError) {
       logger(`failed to extract text: ${err}`);
@@ -91,9 +101,10 @@ export const removePunctuation = (text: string = ''): string => {
  * @returns an array of string tokens representing a clean
  * version of the sentence
  */
-export const tokenizeSentence = (pageText: PageText): Array<string> => {
+export const tokenizePageText = (pageText: PageText): Array<string> => {
   const tokenizer = new TreebankWordTokenizer();
-  const tokens = tokenizer.tokenize(removePunctuation(pageText.text)).map(token => token.toLowerCase());
+  const noPunct = removePunctuation(pageText.text)
+  const tokens = tokenizer.tokenize(noPunct).map(token => token.toLowerCase());
   return removeStopwords(tokens);
 }
 
@@ -106,7 +117,7 @@ export const tokenizeSentence = (pageText: PageText): Array<string> => {
  */
 export const getWeightedFrequencies = (texts: Array<PageText>): Lookup => {
   const frequencies = texts.reduce((h: Lookup, pageText: PageText) => {
-    const tokens = tokenizeSentence(pageText);
+    const tokens = tokenizePageText(pageText);
 
     tokens.forEach(token => {
       if (!h[token]) {
@@ -139,7 +150,7 @@ export const getWeightedFrequencies = (texts: Array<PageText>): Lookup => {
 export const addWeights = (pageTexts: Array<PageText>): Array<WeightedText> => {
   const frequencies = getWeightedFrequencies(pageTexts);
   return pageTexts.map((pageText: PageText) => {
-    const tokens = tokenizeSentence(pageText);
+    const tokens = tokenizePageText(pageText);
     const weightedSum = tokens.reduce((sum, token) => {
       return sum + frequencies[token];
     }, 0);
@@ -187,7 +198,7 @@ export const calcSummary = (pageTexts: Array<PageText>): string => {
 
   const summary = candidates.map(weighted => {
     return weighted.pageText.text?.trim();
-  }).slice(0, 2).join('\n')
+  }).slice(0, 2).join('\n');
 
   return (summary.length
     ? summary
@@ -208,7 +219,7 @@ export const calcSentiment = (pageTexts: Array<PageText>): Array<PageText> => {
   const analyzer = new SentimentAnalyzer('English', PorterStemmer, 'afinn');
 
   return pageTexts.map(pageText => {
-    const tokens: Array<string> = tokenizeSentence(pageText);
+    const tokens: Array<string> = tokenizePageText(pageText);
     pageText.sentiment = analyzer.getSentiment(tokens);
     return pageText;
   });
