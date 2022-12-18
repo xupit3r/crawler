@@ -3,14 +3,14 @@ import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
-import { ImageLink, PageText, WorkerRegister } from './types';
+import { ImageLink, WorkerRegister } from './types';
 import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
-import { calcSummary, calcSentiment } from './text';
+import { calcSummary, calcSentiment, calcTermFrequencies, calcNgrams } from './text';
 import { v4 as uuid } from 'uuid';
 import { Worker } from 'worker_threads';
 
-const MAX_WORKERS = 5;
+const MAX_WORKERS = 10;
 const WORKER_SCRIPT = './src/lib/workers/texter.js';
 const workers: WorkerRegister = {};
 
@@ -303,6 +303,60 @@ export const addSentiment = async () => {
             sentiment: true
           }
         });
+      }
+    }
+  }
+
+  exit();
+}
+
+export const addTermFrequencies = async () => {
+  await storage.connect();
+  
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const text = db.collection('text');
+  const terms = db.collection('terms');
+
+  await updateIndices();
+
+  await pages.updateMany({}, {
+    $set: {
+      tf: false
+    }
+  });
+
+  const cursor = await text.find().project({
+    page: 1,
+    text: 1
+  });
+  
+  while (await cursor.hasNext()) {
+    const textDoc = await cursor.next();
+
+    if (textDoc) {
+      if (textDoc && textDoc.text.length > 0) {
+        logger(`adding tf for ${textDoc.page}`);
+
+        const termFrequencies = calcNgrams(textDoc.text);
+
+        await terms.updateOne({
+          page: textDoc.page
+        }, {
+          $set: {
+            tf: termFrequencies
+          }
+        }, { upsert: true });
+  
+        await pages.updateOne({
+          _id: textDoc.page
+        }, {
+          $set: {
+            tf: true
+          }
+        });
+      } else {
+        logger(`no text for ${textDoc.page}`);
       }
     }
   }

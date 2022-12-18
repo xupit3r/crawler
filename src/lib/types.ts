@@ -104,6 +104,10 @@ export type WorkerRegister = {
   [id: string]: Worker
 }
 
+export type TermFrequencies = {
+  [term: string]: number
+}
+
 export type TextRegister = {
   [key: string]: PageText 
 }

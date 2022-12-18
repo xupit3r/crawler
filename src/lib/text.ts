@@ -1,8 +1,8 @@
 import debug from 'debug';
 import * as cheerio from 'cheerio';
-import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer } from 'natural';
+import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer, NGrams, WordTokenizer } from 'natural';
 import { removeStopwords } from 'stopword';
-import { Lookup, PageText, TextRegister, WeightedText } from './types';
+import { Lookup, PageText, TextRegister, WeightedText, TermFrequencies } from './types';
 
 const logger = debug('text');
 
@@ -102,7 +102,7 @@ export const removePunctuation = (text: string = ''): string => {
  * version of the sentence
  */
 export const tokenizePageText = (pageText: PageText): Array<string> => {
-  const tokenizer = new TreebankWordTokenizer();
+  const tokenizer = new WordTokenizer();
   const noPunct = removePunctuation(pageText.text)
   const tokens = tokenizer.tokenize(noPunct).map(token => token.toLowerCase());
   return removeStopwords(tokens);
@@ -129,6 +129,7 @@ export const getWeightedFrequencies = (texts: Array<PageText>): Lookup => {
 
     return h;
   }, {} as Lookup);
+
   const max = Math.max.apply(Math.max, Object.values(frequencies));
   
   return Object.keys(frequencies).reduce((h: Lookup, key: string) => {
@@ -223,4 +224,69 @@ export const calcSentiment = (pageTexts: Array<PageText>): Array<PageText> => {
     pageText.sentiment = analyzer.getSentiment(tokens);
     return pageText;
   });
+}
+
+/**
+ * Given a set of page texts, this will calculate the term frequencies
+ * for that page.
+ * 
+ * @param pageTexts set of page texts to calculate frequencies for
+ * @returns a term frequencies document containing a weighted frequency
+ * for each term in the document
+ */
+export const calcTermFrequencies = (pageTexts: Array<PageText>): TermFrequencies => {
+  const all = pageTexts.map(tokenizePageText).reduce((arr, tokens) => {
+    return arr.concat(tokens);
+  }, []);
+
+  const freqs = all.reduce((freqs: TermFrequencies, token: string): TermFrequencies => {
+    if (!freqs[token]) {
+      freqs[token] = 0;
+    }
+
+    freqs[token]++;
+
+    return freqs;
+  }, {});
+
+  const maxTermFreq = Math.max.apply(Math.max, Object.values(freqs));
+
+  return Object.keys(freqs).reduce((w, key) => {
+    w[key] = w[key] / maxTermFreq;
+    return w;
+  }, freqs);
+}
+
+/**
+ * Generates ngrams and calculates the weighted frequences of those.
+ * 
+ * @param pageTexts page texts to generate ngram frequencies for
+ * @returns 
+ */
+export const calcNgrams = (pageTexts: Array<PageText>): TermFrequencies => {
+  const tokenizedTexts = pageTexts.map(tokenizePageText);
+  const ngrams = tokenizedTexts.map(words => {
+    return NGrams.trigrams(words, '', '').map(bigram => {
+      return bigram.filter(w => w.length).join(' ');
+    });
+  }).reduce((arr, tokens) => {
+    return arr.concat(tokens)
+  }, []);
+
+  const freqs = ngrams.reduce((freqs: TermFrequencies, token: string): TermFrequencies => {
+    if (!freqs[token]) {
+      freqs[token] = 0;
+    }
+
+    freqs[token]++;
+
+    return freqs;
+  }, {});
+
+  const maxTermFreq = Math.max.apply(Math.max, Object.values(freqs));
+
+  return Object.keys(freqs).reduce((w, key) => {
+    w[key] = w[key] / maxTermFreq;
+    return w;
+  }, freqs);
 }
