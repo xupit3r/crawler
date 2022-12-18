@@ -6,7 +6,7 @@ import * as cheerio from 'cheerio';
 import { ImageLink, WorkerRegister } from './types';
 import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
-import { calcSummary, calcSentiment, calcTermFrequencies, calcNgrams } from './text';
+import { calcSummary, calcSentiment, calcTermFrequencies, calcNgrams, extractTags } from './text';
 import { v4 as uuid } from 'uuid';
 import { Worker } from 'worker_threads';
 
@@ -144,9 +144,13 @@ export const collectText = async () => {
 
   await updateIndices();
 
-  const pageDocs = await pages.find().project({
+  const pageDocs = await pages.find({
+    extractedText: {
+      $ne: true
+    }
+  }).project({
     _id: 1,
-    url: 1
+    url: 1,
   }).toArray();
 
   let currentIdx = 0;
@@ -357,6 +361,47 @@ export const addTermFrequencies = async () => {
         });
       } else {
         logger(`no text for ${textDoc.page}`);
+      }
+    }
+  }
+
+  exit();
+}
+
+export const addPageTags = async () => {
+  await storage.connect();
+  
+  const db = storage.db('crawler');
+  const pages = db.collection('pages');
+  const terms = db.collection('terms');
+
+  await updateIndices();
+
+  const cursor = await pages.find().project({
+    _id: 1,
+    url: 1
+  });
+  
+  while (await cursor.hasNext()) {
+    const pageDoc = await cursor.next();
+
+    if (pageDoc) {
+      const termsDoc = await terms.findOne({
+        page: pageDoc._id
+      });
+
+      if (termsDoc) {
+        const tags = extractTags(termsDoc.tf);
+
+        logger(`setting ${tags} tags for ${pageDoc.url}`);
+
+        await pages.updateOne({
+          _id: pageDoc._id
+        }, {
+          $set: {
+            tags: tags 
+          }
+        });
       }
     }
   }

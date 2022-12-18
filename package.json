@@ -14,6 +14,7 @@
     "start:summarize": "npm run build && DEBUG=learn node build/index.js summarizeText",
     "start:sentiment": "npm run build && DEBUG=learn node build/index.js addSentiment",
     "start:tf": "npm run build && DEBUG=learn node build/index.js addTermFrequencies",
+    "start:tags": "npm run build && DEBUG=learn node build/index.js addPageTags",
     "start:combineImages": "npm run build && DEBUG=reconfigure node build/index.js combineImages",
     "build": "rimraf ./build && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"

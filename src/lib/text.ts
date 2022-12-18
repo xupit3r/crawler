@@ -1,6 +1,6 @@
 import debug from 'debug';
 import * as cheerio from 'cheerio';
-import { SentimentAnalyzer, PorterStemmer,TreebankWordTokenizer, NGrams, WordTokenizer } from 'natural';
+import { SentimentAnalyzer, PorterStemmer, NGrams, WordTokenizer } from 'natural';
 import { removeStopwords } from 'stopword';
 import { Lookup, PageText, TextRegister, WeightedText, TermFrequencies } from './types';
 
@@ -289,4 +289,26 @@ export const calcNgrams = (pageTexts: Array<PageText>): TermFrequencies => {
     w[key] = w[key] / maxTermFreq;
     return w;
   }, freqs);
+}
+
+/**
+ * Pull any terms (tags) that standout based on the term frequencies
+ * 
+ * @param terms the term frequencies to extract good tags from
+ * @returns an array of tags (i.e. terms that standout)
+ */
+export const extractTags = (terms: TermFrequencies, limit: number = 3): Array<string> => {
+  const pairs = Object.entries(terms);
+  const sum = pairs.reduce((s, pair) => s + pair[1], 0);
+  const avg = sum / pairs.length * 2;
+  const candidates = pairs.filter(pair => pair[1] > avg)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(pair => pair[0]);
+  const deduped = Object.keys(
+    candidates.reduce((h: Lookup, c: string) => {
+      return h[c] = 1, h;
+    }, {})
+  );
+
+  return deduped.slice(0, limit);
 }
