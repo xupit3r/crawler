@@ -1,9 +1,9 @@
-import { fetch } from 'undici';
-import * as cheerio from 'cheerio';
+import puppeteer, { HTTPResponse, TimeoutError } from 'puppeteer';
+import { fetch, Response } from 'undici';
 import debug from 'debug';
-import { Link, Page, WebData, CrawlerError, ErrorGenerated, RequestError } from './types';
+import { Link, Page, WebData, CrawlerError, ErrorGenerated, RequestError, HTMLContent } from './types';
 import { savePage, saveWebData, updateQueue } from './storage';
-import { getHostname, okToStoreResponse, hasProto, normalizeUrl, isBadExtension} from './utils';
+import { getHostname, okToStoreResponse, normalizeUrl, isBadExtension, hasProto} from './utils';
 
 const logger = debug('page');
 
@@ -30,30 +30,83 @@ const generateError = (url: string, hostname: string, err: RequestError): ErrorG
     host: hostname,
     url: url,
     status: -100,
-    message: '',
+    message: err.message,
     headers: {}
-  }
+  };
 
   // if this is an Axios error, attach additional
   // metadata to the Page and CrawlerError
   if (err.response) {
-    const headers: Partial<Record<string, string>> = {};
-
-    for (const pair of err.response.headers.entries()) {
-      headers[pair[0]] = pair[1];
+    if (err.response instanceof Response) {
+      const headers: Partial<Record<string, string>> = {};
+  
+      for (const pair of err.response.headers.entries()) {
+        headers[pair[0].toLowerCase()] = pair[1];
+      }
+  
+      page.status = err.response.status;
+      crawlerError.status = err.response.status;
+      crawlerError.headers = headers;
+    } else if (err instanceof HTTPResponse) {
+      page.status = err.response.status();
+      crawlerError.status = err.response.status();
+      crawlerError.headers = err.response.headers();
     }
-
-    page.status = err.response.status;
-    crawlerError.status = err.response.status;
-    crawlerError.headers = headers;
-
-    // set the messages
-    crawlerError.message = err.message;
   }
 
   return {
     page,
     crawlerError
+  }
+}
+
+/**
+ * Pulls the page and grabs any relevant content for storage
+ * 
+ * @param url the url to retrieve content for
+ * @returns an HTMLContent object that contains the html and any links
+ */
+const getPageContent = async (url: string): Promise<HTMLContent> => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+
+  try {
+    const response: HTTPResponse = await page.goto(url) as HTTPResponse;
+
+    if (!okToStoreResponse(response)) {
+      throw {
+        message: 'will not process',
+        type: 'CRAWLER_BAD_RESPONSE_TYPE',
+        url: url,
+        response: response
+      };
+    }
+  
+    await page.waitForNetworkIdle({
+      idleTime: 500
+    });
+  
+    const html = await page.$eval('html', (el) => el.outerHTML);
+    const links = await page.$$eval('a', (anchors) => anchors.map(a => a.href));
+    
+    await browser.close();
+  
+    return {
+      html: html,
+      links
+    } as HTMLContent;
+  } catch (err) {
+    await browser.close();
+
+    if (err instanceof TimeoutError) {
+      throw {
+        message: err.message || 'request timed out',
+        type: 'TIMEOUT_ERROR',
+        url: url
+      };
+    }
+
+    throw err;
   }
 }
 
@@ -115,45 +168,27 @@ export const processPage = async (url: string) => {
   }
 
   try {
-    // grab the page
-    const resp = await fetch(url);
+    // try to grab the page
+    const content = await getPageContent(url);
 
-    // bail if this is not something we want to store
-    if (!okToStoreResponse(resp)) {
-      throw {
-        message: 'Will not process',
-        type: 'CRAWLER_BAD_RESPONSE_TYPE',
-        url: url,
-        response: resp
-      };
-    }
-
-    const html = await resp.text();
-    const $ = cheerio.load(html);
-    const hrefs = $('a').toArray().map(anchor => {
-      const [href] = anchor.attributes.filter(attribute => attribute.name === 'href');
-      return href ? href.value : '';
-    }).filter(hasProto).map(link => normalizeUrl(link, url));
-
-    const pageLinks: Array<Link> = hrefs.map(link => ({
+    const pageLinks: Array<Link> = content.links.filter(hasProto).map(link => ({
       source: url,
       sourceHost: hostname,
       host: getHostname(link),
-      url: link
+      url: normalizeUrl(link, '')
     }));
 
     const page: Page = {
       host: hostname,
       url: url,
       type: 'html',
-      status: resp.status,
       links: pageLinks
     };
 
     const addedPage = await savePage(page);
 
     const webData: WebData = {
-      data: html,
+      data: content.html,
       page: addedPage._id
     };
     await saveWebData(webData);

@@ -19,8 +19,8 @@ parentPort?.on('message', async ({ url, workerId}) => {
     logger(`failed to retrieve ${url} -- ${crawlerError.message}`);
 
     if (isCoolDownStatus(crawlerError.status)) {
-      const waitTime: number = (typeof crawlerError.headers['Retry-After'] !== 'undefined' 
-        ? Number.parseInt(crawlerError.headers['Retry-After']) 
+      const waitTime: number = (typeof crawlerError.headers['retry-After'] !== 'undefined' 
+        ? Number.parseInt(crawlerError.headers['retry-After']) 
         : 3600
       );
 

@@ -1,7 +1,13 @@
 import { MobileNet } from "@tensorflow-models/mobilenet";
 import { ObjectId } from "mongodb";
+import { HTTPResponse } from "puppeteer";
 import { Response } from "undici";
 import { Worker } from "worker_threads";
+
+export type HTMLContent = {
+  html: string
+  links: Array<string>
+}
 
 export type Link = {
   source: string
@@ -13,7 +19,7 @@ export type Link = {
 export type Page = {
   url: string
   host: string
-  status: number
+  status?: number
   type: 'html' | 'error' | 'other'
   links: Array<Link>
 }
@@ -84,7 +90,7 @@ export type RequestError = {
   message: string
   type: string
   url: string
-  response: Response
+  response?: Response | HTTPResponse
 }
 
 export type CrawlerError = {
