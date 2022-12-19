@@ -1,4 +1,5 @@
 import path from 'path';
+import { HTTPResponse } from 'puppeteer';
 import { Response } from 'undici';
 import { URL } from 'whatwg-url';
 
@@ -17,7 +18,7 @@ const BAD_EXTENSIONS = [
  */
  export const normalizeUrl = (url: string, base: string): string => {
   try {
-    const full = new URL(url, base);
+    const full = base.length ? new URL(url, base) : new URL(url);
   
     // do not include hashes...
     full.hash = '';
@@ -69,18 +70,21 @@ export const hasProto = (url: string): boolean => {
  * @param response the response to check
  * @returns true if the response is OK, false otherwise
  */
-export const okToStoreResponse = (response: Response) => {
+export const okToStoreResponse = (response: Response | HTTPResponse) => {
   const checks = {
     contentType: false
   };
 
-  if (typeof response.headers.get('content-type') === 'string') {
-    const contentType = response.headers.get('content-type');
+  let contentType = '';
 
-    if (contentType !== null) {
-      checks.contentType = contentType.indexOf('text/html') > -1;
-    }
+  if (response instanceof Response) {
+    contentType = (response.headers.get('content-type') || '');
+  } else {
+    const headers = response.headers();
+    contentType = (headers['content-type'] || '')
   }
+
+  checks.contentType = contentType.indexOf('text/html') > -1;
 
   return checks.contentType;
 }
