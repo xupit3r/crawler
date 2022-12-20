@@ -184,6 +184,8 @@ export const collectText = async () => {
                 logger(`NOTEXT -- ${page.url}`);
               }
 
+              const summary = calcSummary(pageTexts);
+
               await text.updateOne({
                 page: page._id
               }, {
@@ -197,7 +199,9 @@ export const collectText = async () => {
                 _id: page._id
               }, {
                 $set: {
-                  extractedText: true
+                  extractedText: true,
+                  summarized: true,
+                  summary: summary
                 }
               });
 
@@ -227,33 +231,32 @@ export const summarizeText = async () => {
   const pages = db.collection('pages');
   const text = db.collection('text');
 
-  const cursor = await text.find({
+  const cursor = await pages.find({
     summary: {
       $exists: false
     }
   });
 
   while (await cursor.hasNext()) {
-    const doc = await cursor.next();
+    const pageDoc = await cursor.next();
 
-    if (doc) {
-      const summary = calcSummary(doc.text);
-
-      await text.updateOne({
-        _id: doc._id
-      }, {
-        $set: {
-          summary: summary
-        }
+    if (pageDoc) {
+      const textDoc = await text.findOne({
+        page: pageDoc._id
       });
 
-      await pages.updateOne({
-        _id: doc.page
-      }, {
-        $set: {
-          summarized: true
-        }
-      });
+      if (textDoc) {   
+        const summary = calcSummary(textDoc.text);
+
+        await pages.updateOne({
+          _id: pageDoc._id
+        }, {
+          $set: {
+            summarized: true,
+            summary: summary
+          }
+        });
+      }
     }
   }
 
