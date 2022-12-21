@@ -157,7 +157,7 @@ export const collectText = async () => {
 
   while (currentIdx < pageDocs.length) {
     if (Object.keys(workers).length < MAX_WORKERS) {
-      const page = await pageDocs[currentIdx++];
+      const page = pageDocs[currentIdx++];
       
       if (page) {
         const html = await webdata.findOne({
@@ -323,47 +323,58 @@ export const addTermFrequencies = async () => {
   const db = storage.db('crawler');
   const pages = db.collection('pages');
   const text = db.collection('text');
-  const terms = db.collection('terms');
+  const tokens = db.collection('terms');
 
   await updateIndices();
 
-  await pages.updateMany({}, {
-    $set: {
-      tf: false
-    }
-  });
-
-  const cursor = await text.find().project({
-    page: 1,
-    text: 1
+  const cursor = await pages.find({
+    $and: [{
+      tf: {
+        $ne: true
+      }
+    }, {
+      extractedText: {
+        $eq: true
+      }
+    }]
+  }).project({
+    _id: 1,
+    url: 1
   });
   
   while (await cursor.hasNext()) {
-    const textDoc = await cursor.next();
+    const pageDoc = await cursor.next();
 
-    if (textDoc) {
-      if (textDoc && textDoc.text.length > 0) {
-        logger(`adding tf for ${textDoc.page}`);
+    if (pageDoc) {
+      const textDoc = await text.findOne({
+        page: pageDoc._id
+      });
+
+      if (textDoc && textDoc.text && textDoc.text.length > 0) {
+        logger(`adding tf for ${pageDoc.url}`);
 
         const termFrequencies = calcNgrams(textDoc.text);
 
-        await terms.updateOne({
-          page: textDoc.page
-        }, {
-          $set: {
-            tf: termFrequencies
-          }
-        }, { upsert: true });
+        const entries = Object.entries(termFrequencies);
+        const tokenDocs = entries.map(([term, score]) => {
+          return {
+            page: pageDoc._id,
+            term: term,
+            score: score
+          };
+        });
+
+        await tokens.insertMany(tokenDocs);
   
         await pages.updateOne({
-          _id: textDoc.page
+          _id: pageDoc._id
         }, {
           $set: {
             tf: true
           }
         });
       } else {
-        logger(`no text for ${textDoc.page}`);
+        logger(`no text for ${pageDoc._id}`);
       }
     }
   }
@@ -408,6 +419,43 @@ export const addPageTags = async () => {
       }
     }
   }
+
+  exit();
+}
+
+export const splitTerms = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const terms = db.collection('terms');
+  const tokens = db.collection('tokens');
+
+  await updateIndices();
+
+  const cursor = await terms.find();
+
+  logger('splitting terms');
+  while (await cursor.hasNext()) {
+    const termsDoc = await cursor.next();
+
+    if (termsDoc) {
+      const entries = Object.entries(termsDoc.tf);
+      const tokenDocs = entries.map(([term, score]) => {
+        return {
+          page: termsDoc.page,
+          term: term,
+          score: score
+        };
+      });
+
+      await tokens.insertMany(tokenDocs);
+    }
+  }
+
+  logger('creating index for tokens.term')
+  await tokens.createIndex({
+    term: 1
+  });
 
   exit();
 }

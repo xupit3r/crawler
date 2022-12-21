@@ -34,6 +34,11 @@ export const createIndices = async () => {
     text: 1
   });
 
+  logger('creating token index');
+  await db.collection('tokens').createIndex({
+    term: 1
+  });
+
   logger('creating page sentiment index');
   await db.collection('pages').createIndex({
     sentiment: 1
