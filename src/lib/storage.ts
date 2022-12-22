@@ -14,7 +14,7 @@ if (typeof process.env.MONGO_CONNECT_STRING === 'undefined') {
   exit(-1);
 }
 
-const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
+export const storage = new MongoClient(process.env.MONGO_CONNECT_STRING);
 
 /**
  * Saves a page in storage. Updates all necessary

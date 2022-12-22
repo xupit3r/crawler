@@ -46,7 +46,10 @@ export const dedupe = (pageTexts: Array<PageText>): Array<PageText> => {
 export const extractText = (html: string): Array<PageText> => {
   try {
     const $ = cheerio.load(html);    
-    const allParagraphs = $('body p');
+
+    $('body').find('header,footer,pre,h1,h2,h3,h4,h5,h6').remove();
+
+    const allParagraphs = $('body p:not(:has(p,div)), body div:not(:has(div))');
     const text = allParagraphs.map((i, element): PageText => {
       return {
         text: cleanText($(element).text())
@@ -58,20 +61,15 @@ export const extractText = (html: string): Array<PageText> => {
       )
     });
 
-    // now, keep text around that seems relevant to the general
-    // corpus of text found withing the document. not a summary,
-    // but just an attempt to keep the text gathered sane...
+    // remove any possible duplicates
     const base = dedupe(text);
-    const weighted = addWeights(base);
-    const threshold = calcThreshold(weighted);
-    const candidates = weighted.filter((value: WeightedText) => {
-      return value.weight >= threshold;
-    });
 
-    return candidates.map(weighted => {
+    // trim to good candidates, this will hopefully remove
+    // obviously wrong shit
+    return base.map(pageText => {
       return {
-        text: weighted.pageText.text?.trim()
-      };
+        text: pageText.text?.trim()
+      }; 
     });
   } catch (err) {
     if (err instanceof RangeError) {
@@ -185,7 +183,9 @@ export const calcThreshold = (weighted: Array<WeightedText>): number => {
  * could be generated
  */
 export const calcSummary = (pageTexts: Array<PageText>): string => {
-  if (pageTexts.length === 1) {
+  if (pageTexts.length === 0) {
+    return '🤷‍♀️';
+  } else if (pageTexts.length === 1) {
     return (pageTexts[0].text || '🤷‍♀️');
   }
 
@@ -203,7 +203,7 @@ export const calcSummary = (pageTexts: Array<PageText>): string => {
 
   return (summary.length
     ? summary
-    : '🤷‍♀️'
+    : pageTexts[0].text || '🤷‍♀️'
   );
 }
 

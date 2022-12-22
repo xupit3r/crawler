@@ -66,7 +66,7 @@ const generateError = (url: string, hostname: string, err: RequestError): ErrorG
  * @param url the url to retrieve content for
  * @returns an HTMLContent object that contains the html and any links
  */
-const getPageContent = async (url: string): Promise<HTMLContent> => {
+export const getPageContent = async (url: string): Promise<HTMLContent> => {
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
 
@@ -83,7 +83,7 @@ const getPageContent = async (url: string): Promise<HTMLContent> => {
     }
   
     await page.waitForNetworkIdle({
-      idleTime: 500
+      idleTime: 1000
     });
   
     const html = await page.$eval('html', (el) => el.outerHTML);
@@ -108,6 +108,23 @@ const getPageContent = async (url: string): Promise<HTMLContent> => {
 
     throw err;
   }
+}
+
+/**
+ * Prepares an array of links found within a page's HTML
+ * 
+ * @param url the page url
+ * @param hostname the page hostname
+ * @param links links found in page
+ * @returns an array of Link objects associated with the page
+ */
+export const prepareLinks = (url: string, hostname: string, links: Array<string>): Array<Link> => {
+  return links.filter(hasProto).map(link => ({
+    source: url,
+    sourceHost: hostname,
+    host: getHostname(link),
+    url: normalizeUrl(link, '')
+  }));
 }
 
 /**
@@ -171,12 +188,7 @@ export const processPage = async (url: string) => {
     // try to grab the page
     const content = await getPageContent(url);
 
-    const pageLinks: Array<Link> = content.links.filter(hasProto).map(link => ({
-      source: url,
-      sourceHost: hostname,
-      host: getHostname(link),
-      url: normalizeUrl(link, '')
-    }));
+    const pageLinks: Array<Link> = prepareLinks(url, hostname, content.links);
 
     const page: Page = {
       host: hostname,
@@ -191,6 +203,7 @@ export const processPage = async (url: string) => {
       data: content.html,
       page: addedPage._id
     };
+
     await saveWebData(webData);
 
     await updateQueue(pageLinks);

@@ -3,12 +3,13 @@ import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
-import { ImageLink, WorkerRegister } from './types';
+import { CrawlerError, ImageLink, WorkerRegister } from './types';
 import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
-import { calcSummary, calcSentiment, calcTermFrequencies, calcNgrams, extractTags } from './text';
+import { calcSummary, calcSentiment, extractText, calcNgrams, extractTags } from './text';
 import { v4 as uuid } from 'uuid';
 import { Worker } from 'worker_threads';
+import { getPageContent } from './page';
 
 const MAX_WORKERS = 10;
 const WORKER_SCRIPT = './src/lib/workers/texter.js';
@@ -139,16 +140,11 @@ export const collectText = async () => {
   await storage.connect();
   const db = storage.db('crawler');
   const pages = db.collection('pages');
-  const webdata = db.collection('webdata');
   const text = db.collection('text');
 
   await updateIndices();
 
-  const pageDocs = await pages.find({
-    extractedText: {
-      $ne: true
-    }
-  }).project({
+  const pageDocs = await pages.find().project({
     _id: 1,
     url: 1,
   }).toArray();
@@ -160,60 +156,55 @@ export const collectText = async () => {
       const page = pageDocs[currentIdx++];
       
       if (page) {
-        const html = await webdata.findOne({
-          page: page._id
+        const workerId = uuid();
+        const worker = new Worker(WORKER_SCRIPT);
+
+        logger(`STARTING -- ${workerId}`);
+
+        worker.postMessage({
+          pageId: page._id.toString(),
+          workerId: workerId
         });
-  
-        if (html && typeof html.data === 'string') {
-          const workerId = uuid();
-          const worker = new Worker(WORKER_SCRIPT);
-          
-          logger(`STARTING -- ${workerId}`);
-    
-          worker.postMessage({
-            html: html.data,
-            workerId: workerId
-          });
-    
-          workers[workerId] = worker;
-    
-          worker.on('message', async ({ workerId, pageTexts }) => {
-            try {
-              // create a text document for this page
-              if (pageTexts.length == 0) {
-                logger(`NOTEXT -- ${page.url}`);
-              }
 
-              const summary = calcSummary(pageTexts);
+        workers[workerId] = worker;
 
-              await text.updateOne({
-                page: page._id
-              }, {
-                $set: {
-                  text: pageTexts
-                }
-              }, { upsert: true });
-      
-              // indicate that we have added text for this page
-              await pages.updateOne({
-                _id: page._id
-              }, {
-                $set: {
-                  extractedText: true,
-                  summarized: true,
-                  summary: summary
-                }
-              });
-
-              logger(`COMPLETE -- ${workerId}`);
-            } catch (err) {
-              logger(`ERROR -- ${workerId} ${err}`);
-            } finally {
-              await workers[workerId].terminate();
-              delete workers[workerId];
+        worker.on('message', async ({ workerId, pageTexts }) => {
+          try {
+            // create a text document for this page
+            if (pageTexts.length == 0) {
+              logger(`NOTEXT -- ${page._id}`);
             }
-          });
-        }      
+
+            const summary = calcSummary(pageTexts);
+
+            await text.updateOne({
+              page: page._id
+            }, {
+              $set: {
+                text: calcSentiment(pageTexts)
+              }
+            }, { upsert: true });
+
+            // indicate that we have added text for this page
+            await pages.updateOne({
+              _id: page._id
+            }, {
+              $set: {
+                extractedText: true,
+                summarized: true,
+                sentiment: true,
+                summary: summary
+              }
+            });
+
+            logger(`COMPLETE -- ${workerId}`);
+          } catch (err) {
+            logger(`ERROR -- ${workerId} ${err}`);
+          } finally {
+            await workers[workerId].terminate();
+            delete workers[workerId];
+          }
+        });
       }
     } else {
       await sleep(50);
@@ -232,9 +223,15 @@ export const summarizeText = async () => {
   const text = db.collection('text');
 
   const cursor = await pages.find({
-    summary: {
-      $exists: false
-    }
+    $or: [{
+      summary: {
+        $exists: false
+      }
+    }, {
+      summary: {
+        $eq: '🤷‍♀️'
+      }
+    }]
   });
 
   while (await cursor.hasNext()) {
@@ -456,6 +453,20 @@ export const splitTerms = async () => {
   await tokens.createIndex({
     term: 1
   });
+
+  exit();
+}
+
+export const testSPA = async () => {
+  try {
+    const content = await getPageContent('https://github.com/blog/2496-commit-together-with-co-authors');
+
+    logger(extractText(content.html));
+
+  } catch (err) {
+    const error = err as CrawlerError;
+    logger(`FAILED: ${error.message}`);
+  }
 
   exit();
 }
