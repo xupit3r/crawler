@@ -24,9 +24,18 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const OPENAI_PROMPTS = {
-  categories: 'provide the top 5 categories for the following text and return it as a json array'
-}
+  categories: 'provide the top 5 categories for the following text and provide it as a json array only'
+};
 
+const ARRAY_MATCHER = /(\[.*\])/;
+
+/**
+ * Given some text this function will extract the top 5 categories.
+ * 
+ * @param text the text from which we wish to extract categories
+ * @returns an array of categories for the supplied text or an empty array if 
+ * no categories could be assigned
+ */
 export const categoriesFromText = async (text: string): Promise<Array<string>> => {
   const response = await openai.createCompletion({
     model: 'text-davinci-003',
@@ -37,10 +46,14 @@ export const categoriesFromText = async (text: string): Promise<Array<string>> =
     frequency_penalty: 0.8,
     presence_penalty: 0.0,
   });
-  const categoriesJSON = response.data.choices[0].text;
+  const answer = response.data.choices[0].text;
 
-  if (typeof categoriesJSON === 'string') {
-    return JSON.parse(categoriesJSON);
+  if (typeof answer === 'string') {
+    const matches = answer.match(ARRAY_MATCHER);
+
+    if (matches) {
+      return JSON.parse(matches[0]);
+    }
   }
 
  
