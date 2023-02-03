@@ -10,6 +10,7 @@ import { calcSummary, calcSentiment, extractText, calcNgrams, extractTags } from
 import { v4 as uuid } from 'uuid';
 import { Worker } from 'worker_threads';
 import { getPageContent } from './page';
+import { categoriesFromText, classifyMany } from './classify';
 
 const MAX_WORKERS = 10;
 const WORKER_SCRIPT = './src/lib/workers/texter.js';
@@ -144,7 +145,11 @@ export const collectText = async () => {
 
   await updateIndices();
 
-  const pageDocs = await pages.find().project({
+  const pageDocs = await pages.find({
+    extractedText: {
+      $ne: true
+    }
+  }).project({
     _id: 1,
     url: 1,
   }).toArray();
@@ -467,6 +472,48 @@ export const testSPA = async () => {
     const error = err as CrawlerError;
     logger(`FAILED: ${error.message}`);
   }
+
+  exit();
+}
+
+export const classifyImages = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const images = db.collection('images');
+
+  const cursor = await images.find();
+
+  while (await cursor.hasNext()) {
+    const doc = await cursor.next();
+
+    if (doc) {
+      const classifications = await classifyMany(doc.images);
+
+      console.log(`classified images for ${doc._id}`);
+      console.log(classifications.map(c => c.categories));
+
+      await images.updateOne({
+        _id: doc._id
+      }, {
+        $set: {
+          images: classifications
+        }
+      });
+    }
+  }
+
+  exit();
+}
+
+export const categorizeText = async () => {
+  const text = `
+    Black-on-black ware is a 20th- and 21st-century pottery tradition developed by the Puebloan Native American ceramic artists in Northern New Mexico. Traditional reduction-fired blackware has been made for centuries by pueblo artists. Black-on-black ware of the past century is produced with a smooth surface, with the designs applied through selective burnishing or the application of refractory slip. Another style involves carving or incising designs and selectively polishing the raised areas. For generations several families from Kha'po Owingeh and P'ohwhóge Owingeh pueblos have been making black-on-black ware with the techniques passed down from matriarch potters. Artists from other pueblos have also produced black-on-black ware. Several contemporary artists have created works honoring the pottery of their ancestors.
+  `;
+
+  const categories = await categoriesFromText(text);
+
+  console.log(categories);
 
   exit();
 }
