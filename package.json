@@ -17,7 +17,7 @@
     "start:tf-split": "npm run build && DEBUG=learn node build/index.js splitTerms",
     "start:tags": "npm run build && DEBUG=learn node build/index.js addPageTags",
     "start:spa": "npm run build && DEBUG=learn,page node build/index.js testSPA",
-    "start:classify-images": "npm run build && DEBUG=learn,page node build/index.js classifyImages",
+    "start:classifyImages": "npm run build && DEBUG=learn,page node build/index.js classifyImages",
     "start:combineImages": "npm run build && DEBUG=reconfigure node build/index.js combineImages",
     "start:categorizeText": "npm run build && DEBUG=reconfigure node build/index.js categorizeText",
     "build": "rimraf ./build && tsc",
