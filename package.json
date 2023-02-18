@@ -20,6 +20,7 @@
     "start:classifyImages": "npm run build && DEBUG=learn,page node build/index.js classifyImages",
     "start:combineImages": "npm run build && DEBUG=reconfigure node build/index.js combineImages",
     "start:categorizeText": "npm run build && DEBUG=reconfigure node build/index.js categorizeText",
+    "start:createSites": "npm run build && DEBUG=reconfigure node build/index.js createSites",
     "build": "rimraf ./build && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

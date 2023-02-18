@@ -3,7 +3,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import debug from 'debug';
 import { exit } from 'process';
 import * as cheerio from 'cheerio';
-import { CrawlerError, ImageLink, WorkerRegister } from './types';
+import { CrawlerError, ImageLink, Site, WorkerRegister } from './types';
 import { normalizeUrl, sleep } from './utils';
 import { updateIndices } from './reconfigure';
 import { calcSummary, calcSentiment, extractText, calcNgrams, extractTags } from './text';
@@ -531,6 +531,24 @@ export const categorizeText = async () => {
       });
     }
   }
+
+  exit();
+}
+
+export const createSites = async () => {
+  await storage.connect();
+
+  const db = storage.db('crawler');
+  const sites = db.collection('sites');
+  const pages = db.collection('pages');
+
+  const hostDocs = await pages.distinct('host');
+  const hosts: Array<Site> = hostDocs.filter(host => host.length).map(host => ({
+    name: host
+  }));
+
+  console.log('adding sites...')
+  await sites.insertMany(hosts);
 
   exit();
 }

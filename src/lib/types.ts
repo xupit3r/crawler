@@ -24,6 +24,10 @@ export type Page = {
   links: Array<Link>
 }
 
+export type Site = {
+  name: string
+}
+
 export type ImageLink = {
   url: string
   alt: string
