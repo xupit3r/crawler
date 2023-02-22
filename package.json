@@ -52,8 +52,6 @@
   "devDependencies": {
     "@types/async": "^3.2.15",
     "@types/debug": "^4.1.7",
-    "@types/dotenv": "^8.2.0",
-    "@types/mongodb": "^4.0.7",
     "@types/natural": "^5.1.1",
     "@types/node": "^18.11.9",
     "@types/sharp": "^0.31.0",
